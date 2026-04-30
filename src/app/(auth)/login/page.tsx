@@ -16,23 +16,41 @@ export default function LoginPage() {
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
-    setLoading(true)
-    setError(null)
-
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
-    })
-
-    if (error) {
-      setError(error.message)
-      setLoading(false)
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) {
+      setError("Please enter an email address.")
       return
     }
 
-    setSent(true)
-    setLoading(false)
+    setLoading(true)
+    setError(null)
+
+    try {
+      const supabase = createClient()
+      const { error } = await supabase.auth.signInWithOtp({
+        email: trimmedEmail,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      })
+
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      setEmail(trimmedEmail)
+      setSent(true)
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : String(caught)
+      if (message.toLowerCase().includes("failed to fetch")) {
+        setError(
+          "Could not reach Supabase. Check NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY and your network."
+        )
+      } else {
+        setError(message)
+      }
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
