@@ -10,6 +10,42 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
+
+  /* temp.html design tokens (Tailwind v4 custom utilities) */
+  --color-on-secondary-container: #626567;
+  --color-surface-container-low: #eff4ff;
+  --color-on-surface: #0b1c30;
+  --color-on-secondary-fixed-variant: #444749;
+  --color-surface-container-highest: #d3e4fe;
+  --color-outline-variant: #c7c4d7;
+  --color-surface-variant: #d3e4fe;
+  --color-on-secondary-fixed: #191c1e;
+  --color-inverse-surface: #213145;
+  --color-surface-container-lowest: #ffffff;
+  --color-outline: #767586;
+  --color-surface-container-high: #dce9ff;
+  --color-surface-container: #e5eeff;
+  --color-surface: #f8f9ff;
+  --color-on-surface-variant: #464554;
+
+  --spacing-lg: 24px;
+  --spacing-gutter: 20px;
+  --spacing-base: 4px;
+  --spacing-container-max: 1440px;
+  --spacing-sm: 8px;
+  --spacing-xl: 40px;
+  --spacing-md: 16px;
+  --spacing-xs: 4px;
+
+  --font-label-sm: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-h3: var(--font-geist-sans);
+  --font-body-lg: var(--font-geist-sans);
+  --font-h1: var(--font-geist-sans);
+  --font-h2: var(--font-geist-sans);
+  --font-body-md: var(--font-geist-sans);
+
+  /* Keep shadcn radius scale, but allow temp.html classes */
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,6 +84,22 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* temp.html scrollbars */
+.kanban-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+.kanban-scroll::-webkit-scrollbar-track {
+  background: var(--color-surface, var(--color-background));
+  border-radius: 9999px;
+}
+.kanban-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: 9999px;
+}
+.kanban-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-outline);
+}
+
 :root {
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -55,8 +107,8 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.42 0.22 264);  /* indigo — matches #4648d4 */
+  --primary-foreground: oklch(1 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { createClient } from "@/lib/supabase/server"
+import BoardLayout from "@/components/board/BoardLayout"
 
 export default async function BoardPage() {
   const supabase = await createClient()
@@ -35,30 +36,6 @@ export default async function BoardPage() {
       
 
   return (
-    <div className="p-6">
-      <h1>Standup Board</h1>
-      
-      <div className="flex flex-row gap-4 mt-6">
-        {users?.map((member) => {
-          const userCards = cards?.filter((card) => card.owner_id === member.id) ?? []
-          
-          return (
-            <div key={member.id} className="flex flex-col gap-2 w-64">
-              <h2>{member.display_name}</h2>
-              
-              {userCards.length === 0 ? (
-                <p>No cards yet</p>
-              ) : (
-                userCards.map((card) => (
-                  <div key={card.id}>
-                    {card.content}
-                  </div>
-                ))
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
+    <BoardLayout users={users ?? []} cards={cards ?? []} profile={profile} />
   )
 }
