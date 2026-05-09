@@ -47,13 +47,13 @@ export default function Column({ user, cards, role, currentUserId }: Props) {
 
   return (
     <div
-      className="w-[280px] shrink-0 flex flex-col max-h-full"
+      className="w-70 shrink-0 flex flex-col max-h-full"
       style={{
         ["--column-accent" as never]: user.column_color ?? "var(--color-primary)",
       }}
     >
       <div className="mb-sm flex items-center justify-between bg-surface-container-lowest p-sm rounded-lg border border-surface-variant shadow-sm relative overflow-hidden">
-        <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-[var(--column-accent)]" />
+        <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-(--column-accent)" />
         <div className="flex items-center gap-sm pl-sm">
           <div
             className="w-[24px] h-[24px] rounded-full object-cover flex items-center justify-center text-on-surface font-label-sm font-semibold"
@@ -66,14 +66,14 @@ export default function Column({ user, cards, role, currentUserId }: Props) {
             {user.display_name}
           </h3>
         </div>
-        <div className="font-label-sm text-primary font-semibold bg-primary/10 px-xs py-[2px] rounded">
+        <div className="font-label-sm text-primary font-semibold bg-primary/10 px-xs py-0.5 rounded">
           {points ?? 0} pts
         </div>
       </div>
 
       <div className="h-[4px] bg-surface-container-high rounded-full mb-md overflow-hidden">
         <div
-          className="h-full bg-[var(--column-accent)]"
+          className="h-full bg-(--column-accent)"
           style={{ width: `${xpPercent}%` }}
         />
       </div>

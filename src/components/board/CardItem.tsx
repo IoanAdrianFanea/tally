@@ -99,9 +99,9 @@ export default function CardItem({ card, role }: Props) {
         {...listeners}
         className="group bg-[#f0fdf4] rounded-lg border border-[#bbf7d0] shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-md relative overflow-hidden"
       >
-        <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#22c55e]" />
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#22c55e]" />
         <div className="flex items-start gap-sm">
-          <CheckCircle2 className="text-[#22c55e] h-[18px] w-[18px] mt-[2px]" />
+          <CheckCircle2 className="text-[#22c55e] h-4.5 w-4.5 mt-0.5" />
           <p className="font-body-md text-on-surface line-through opacity-70">
             {card.content}
           </p>
@@ -116,9 +116,9 @@ export default function CardItem({ card, role }: Props) {
       style={dndStyle}
       {...attributes}
       {...listeners}
-      className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-[2px] transition-all duration-200 p-md relative overflow-hidden cursor-pointer"
+      className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-200 p-md relative overflow-hidden cursor-pointer"
     >
-      <div className="absolute top-0 left-0 right-0 h-[2px] bg-[var(--column-accent)] opacity-50" />
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-(--column-accent) opacity-50" />
       <p className="font-body-md text-on-surface mb-sm">{card.content}</p>
       <div className="flex justify-between items-end mt-sm">
         <span className="font-label-sm text-outline-variant">{when ?? ""}</span>
@@ -167,11 +167,11 @@ export default function CardItem({ card, role }: Props) {
       {confirmDeleteOpen
         ? createPortal(
             <div
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+              className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4"
               onClick={() => setConfirmDeleteOpen(false)}
             >
               <div
-                className="w-[420px] min-w-[420px] rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
+                className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"

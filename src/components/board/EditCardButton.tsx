@@ -76,11 +76,11 @@ export default function EditCardButton({
       {open
         ? createPortal(
             <div
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+              className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4"
               onClick={() => setOpen(false)}
             >
               <div
-                className="w-[420px] min-w-[420px] rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
+                className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
