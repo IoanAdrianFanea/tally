@@ -18,6 +18,7 @@ type Card = {
 
 type Props = {
   card: Card
+  role: string
 }
 
 function formatWhen(value: string | null | undefined) {
@@ -31,7 +32,7 @@ function formatWhen(value: string | null | undefined) {
   }).format(date)
 }
 
-export default function CardItem({ card }: Props) {
+export default function CardItem({ card, role }: Props) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
@@ -62,6 +63,13 @@ export default function CardItem({ card }: Props) {
     }
   }
 
+  async function completeCard() {
+    const res = await fetch(`/api/cards/${card.id}/complete`, {
+      method: 'POST',
+    })
+    if (res.ok) router.refresh()
+  }
+
   const isGreen = card.status === "green"
   const when = formatWhen(card.created_at)
 
@@ -86,11 +94,28 @@ export default function CardItem({ card }: Props) {
       <div className="flex justify-between items-end mt-sm">
         <span className="font-label-sm text-outline-variant">{when ?? ""}</span>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs">
+  
           <EditCardButton
             cardId={card.id}
             initialContent={card.content}
             onSuccess={() => router.refresh()}
           />
+
+          {role === 'admin' && (
+            <button
+              type="button"
+              className="text-outline hover:text-green-500 transition-colors"
+              aria-label="Mark complete"
+              onClick={(e) => {
+                e.stopPropagation()
+                completeCard()
+              }}
+            >
+              <CheckCircle2 className="h-[16px] w-[16px]" />
+            </button>
+          )}
+
+          {/* Delete button */}
           <button
             type="button"
             className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
@@ -104,6 +129,7 @@ export default function CardItem({ card }: Props) {
           >
             <Trash2 className="h-[16px] w-[16px]" />
           </button>
+
         </div>
       </div>
 

@@ -7,6 +7,7 @@ type User = {
   display_name: string
   team_id: string | null
   column_color: string | null
+  role: string
   points?: number | null
 }
 
@@ -24,6 +25,7 @@ type Props = {
   users: User[]
   cards: Card[]
   profile: Profile | null
+  role: string
 }
 
 function getInitials(name: string | null | undefined) {
@@ -31,7 +33,7 @@ function getInitials(name: string | null | undefined) {
   return trimmed ? trimmed[0]!.toUpperCase() : "?"
 }
 
-export default function BoardLayout({ users, cards, profile }: Props) {
+export default function BoardLayout({ users, cards, profile, role }: Props) {
   const monthLabel = new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
@@ -123,7 +125,7 @@ export default function BoardLayout({ users, cards, profile }: Props) {
           <div className="flex-1 overflow-x-auto kanban-scroll p-lg flex items-start gap-[24px]">
             {users.map((user) => {
               const userCards = cards.filter((c) => c.owner_id === user.id)
-              return <Column key={user.id} user={user} cards={userCards} />
+              return <Column key={user.id} user={user} cards={userCards} role={role} />
             })}
 
             <div className="w-[24px] shrink-0" />

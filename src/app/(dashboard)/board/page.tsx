@@ -36,6 +36,6 @@ export default async function BoardPage() {
       
 
   return (
-    <BoardLayout users={users ?? []} cards={cards ?? []} profile={profile} />
+    <BoardLayout users={users ?? []} cards={cards ?? []} profile={profile} role={profile?.role ?? 'member'} />
   )
 }

@@ -24,6 +24,7 @@ type Card = {
 type Props = {
   user: User
   cards: Card[]
+  role: string
 }
 
 function getInitials(name: string | null | undefined) {
@@ -31,7 +32,7 @@ function getInitials(name: string | null | undefined) {
   return trimmed ? trimmed[0]!.toUpperCase() : "?"
 }
 
-export default function Column({ user, cards }: Props) {
+export default function Column({ user, cards, role }: Props) {
   const router = useRouter()
 
   const points = typeof user.points === "number" ? user.points : null
@@ -75,7 +76,7 @@ export default function Column({ user, cards }: Props) {
 
       <div className="flex flex-col gap-sm overflow-y-auto pb-sm custom-scrollbar">
         {cards.map((card) => (
-          <CardItem key={card.id} card={card} />
+          <CardItem key={card.id} card={card} role={role}/>
         ))}
       </div>
 
