@@ -62,6 +62,7 @@ export default function EditCardButton({
         type="button"
         className="text-outline hover:text-primary transition-colors"
         aria-label="Edit"
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation()
           setError(null)

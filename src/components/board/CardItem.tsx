@@ -2,8 +2,10 @@
 
 import { CheckCircle2, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
+import { useSortable } from "@dnd-kit/sortable"
+import { CSS } from "@dnd-kit/utilities"
 
 import EditCardButton from "@/components/board/EditCardButton"
 import { Button } from "@/components/ui/button"
@@ -37,6 +39,21 @@ export default function CardItem({ card, role }: Props) {
   const [deleting, setDeleting] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: card.id })
+
+  const dndStyle: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : undefined,
+  }
 
   async function deleteCard() {
     setDeleteError(null)
@@ -75,7 +92,13 @@ export default function CardItem({ card, role }: Props) {
 
   if (isGreen) {
     return (
-      <div className="group bg-[#f0fdf4] rounded-lg border border-[#bbf7d0] shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-md relative overflow-hidden">
+      <div
+        ref={setNodeRef}
+        style={dndStyle}
+        {...attributes}
+        {...listeners}
+        className="group bg-[#f0fdf4] rounded-lg border border-[#bbf7d0] shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-md relative overflow-hidden"
+      >
         <div className="absolute top-0 left-0 right-0 h-[2px] bg-[#22c55e]" />
         <div className="flex items-start gap-sm">
           <CheckCircle2 className="text-[#22c55e] h-[18px] w-[18px] mt-[2px]" />
@@ -88,7 +111,13 @@ export default function CardItem({ card, role }: Props) {
   }
 
   return (
-    <div className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-[2px] transition-all duration-200 p-md relative overflow-hidden cursor-pointer">
+    <div
+      ref={setNodeRef}
+      style={dndStyle}
+      {...attributes}
+      {...listeners}
+      className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-[2px] transition-all duration-200 p-md relative overflow-hidden cursor-pointer"
+    >
       <div className="absolute top-0 left-0 right-0 h-[2px] bg-[var(--column-accent)] opacity-50" />
       <p className="font-body-md text-on-surface mb-sm">{card.content}</p>
       <div className="flex justify-between items-end mt-sm">
@@ -106,6 +135,7 @@ export default function CardItem({ card, role }: Props) {
               type="button"
               className="text-outline hover:text-green-500 transition-colors"
               aria-label="Mark complete"
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation()
                 completeCard()
@@ -121,6 +151,7 @@ export default function CardItem({ card, role }: Props) {
             className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
             aria-label="Delete"
             disabled={deleting}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
               setDeleteError(null)

@@ -1,5 +1,6 @@
 // post and get card apis
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function GET(request: NextRequest) { 
@@ -48,7 +49,7 @@ export async function POST(request: NextRequest) {
   
   const { data: profile } = await supabase
     .from('users')
-    .select('team_id')
+    .select('team_id, role')
     .eq('id', user.id)
     .single()
   
@@ -57,24 +58,56 @@ export async function POST(request: NextRequest) {
   }
   
   const body = await request.json()
-  const { content } = body
+  const { content, owner_id } = body
+  const cardOwnerId = typeof owner_id === "string" && owner_id ? owner_id : user.id
   
   if (!content) {
     return NextResponse.json({ error: 'Content is required' }, { status: 400 })
   }
   
   const monthKey = new Date().toISOString().slice(0, 7)
-  
-  const { data: card, error } = await supabase
+
+  const isCrossOwnerInsert = cardOwnerId !== user.id
+
+  if (isCrossOwnerInsert && profile.role !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const insertPayload = {
+    content,
+    owner_id: cardOwnerId,
+    team_id: profile.team_id,
+    month_key: monthKey,
+    status: 'open',
+    position: 0,
+  }
+
+  const db = isCrossOwnerInsert
+    ? createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+    : supabase
+
+  if (isCrossOwnerInsert) {
+    const { data: targetUser, error: targetError } = await db
+      .from('users')
+      .select('team_id')
+      .eq('id', cardOwnerId)
+      .single()
+
+    if (targetError || !targetUser) {
+      return NextResponse.json({ error: 'Invalid owner_id' }, { status: 400 })
+    }
+
+    if (targetUser.team_id !== profile.team_id) {
+      return NextResponse.json({ error: 'Invalid owner_id' }, { status: 400 })
+    }
+  }
+
+  const { data: card, error } = await db
     .from('cards')
-    .insert({
-      content,
-      owner_id: user.id,
-      team_id: profile.team_id,
-      month_key: monthKey,
-      status: 'open',
-      position: 0
-    })
+    .insert(insertPayload)
     .select()
     .single()
   

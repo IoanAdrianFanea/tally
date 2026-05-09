@@ -33,7 +33,7 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
       const res = await fetch("/api/cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: trimmed }),
+        body: JSON.stringify({ content: trimmed, owner_id: ownerId }),
       })
 
       if (!res.ok) {

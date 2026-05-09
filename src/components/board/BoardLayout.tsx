@@ -1,6 +1,6 @@
 import { BarChart3, LayoutGrid, Search, Settings, Trophy } from "lucide-react"
 
-import Column from "@/components/board/Column"
+import BoardCanvasShell from "@/components/board/BoardCanvasShell"
 
 type User = {
   id: string
@@ -26,6 +26,7 @@ type Props = {
   cards: Card[]
   profile: Profile | null
   role: string
+  currentUserId?: string
 }
 
 function getInitials(name: string | null | undefined) {
@@ -33,7 +34,15 @@ function getInitials(name: string | null | undefined) {
   return trimmed ? trimmed[0]!.toUpperCase() : "?"
 }
 
-export default function BoardLayout({ users, cards, profile, role }: Props) {
+export default function BoardLayout({
+  users,
+  cards,
+  profile,
+  role,
+  currentUserId: currentUserIdProp,
+}: Props) {
+  const currentUserId = currentUserIdProp ?? profile?.id ?? ""
+
   const monthLabel = new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
@@ -122,14 +131,12 @@ export default function BoardLayout({ users, cards, profile, role }: Props) {
         </aside>
 
         <main className="flex-1 md:ml-[256px] h-full overflow-hidden bg-background flex flex-col">
-          <div className="flex-1 overflow-x-auto kanban-scroll p-lg flex items-start gap-[24px]">
-            {users.map((user) => {
-              const userCards = cards.filter((c) => c.owner_id === user.id)
-              return <Column key={user.id} user={user} cards={userCards} role={role} />
-            })}
-
-            <div className="w-[24px] shrink-0" />
-          </div>
+          <BoardCanvasShell
+            users={users}
+            cards={cards}
+            role={role}
+            currentUserId={currentUserId}
+          />
 
           <div className="bg-surface-container-lowest border-t border-surface-variant p-md flex flex-wrap items-center gap-md">
             <div className="flex-1 min-w-[200px] relative">

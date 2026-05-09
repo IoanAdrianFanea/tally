@@ -1,6 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { useDroppable } from "@dnd-kit/core"
+import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable"
 
 import AddCardButton from "@/components/board/AddCardButton"
 import CardItem from "@/components/board/CardItem"
@@ -25,6 +27,7 @@ type Props = {
   user: User
   cards: Card[]
   role: string
+  currentUserId: string
 }
 
 function getInitials(name: string | null | undefined) {
@@ -32,8 +35,9 @@ function getInitials(name: string | null | undefined) {
   return trimmed ? trimmed[0]!.toUpperCase() : "?"
 }
 
-export default function Column({ user, cards, role }: Props) {
+export default function Column({ user, cards, role, currentUserId }: Props) {
   const router = useRouter()
+  const { setNodeRef } = useDroppable({ id: user.id })
 
   const points = typeof user.points === "number" ? user.points : null
   const xpPercent = Math.min(
@@ -74,17 +78,24 @@ export default function Column({ user, cards, role }: Props) {
         />
       </div>
 
-      <div className="flex flex-col gap-sm overflow-y-auto pb-sm custom-scrollbar">
-        {cards.map((card) => (
-          <CardItem key={card.id} card={card} role={role}/>
-        ))}
-      </div>
+      <SortableContext items={cards.map((c) => c.id)} strategy={rectSortingStrategy}>
+        <div
+          ref={setNodeRef}
+          className="flex flex-col gap-sm overflow-y-auto pb-sm custom-scrollbar min-h-[24px]"
+        >
+          {cards.map((card) => (
+            <CardItem key={card.id} card={card} role={role} />
+          ))}
+        </div>
+      </SortableContext>
 
-      <AddCardButton
-        ownerId={user.id}
-        teamId={user.team_id ?? ""}
-        onSuccess={() => router.refresh()}
-      />
+      {role === "admin" || user.id === currentUserId ? (
+        <AddCardButton
+          ownerId={user.id}
+          teamId={user.team_id ?? ""}
+          onSuccess={() => router.refresh()}
+        />
+      ) : null}
     </div>
   )
 }

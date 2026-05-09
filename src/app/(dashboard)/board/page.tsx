@@ -36,6 +36,12 @@ export default async function BoardPage() {
       
 
   return (
-    <BoardLayout users={users ?? []} cards={cards ?? []} profile={profile} role={profile?.role ?? 'member'} />
+    <BoardLayout
+      users={users ?? []}
+      cards={cards ?? []}
+      profile={profile}
+      role={profile?.role ?? "member"}
+      currentUserId={profile?.id ?? ""}
+    />
   )
 }

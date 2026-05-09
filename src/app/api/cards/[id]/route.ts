@@ -8,7 +8,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params 
+    const { id } = await params 
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -27,12 +27,28 @@ export async function PATCH(
         return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
 
-    const body = await request.json()
-    const { content } = body
-    
+    const body = (await request.json().catch(() => ({}))) as {
+        content?: unknown
+        position?: unknown
+        owner_id?: unknown
+    }
+
+    const update: Record<string, unknown> = {}
+    if (typeof body.content === 'string') update.content = body.content
+    if (typeof body.position === 'number' && Number.isFinite(body.position)) {
+        update.position = body.position
+    }
+    if (typeof body.owner_id === 'string' && body.owner_id) {
+        update.owner_id = body.owner_id
+    }
+
+    if (Object.keys(update).length === 0) {
+        return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
+    }
+
     const { error } = await supabase
         .from('cards')
-        .update({ content })
+        .update(update)
         .eq('id', id)
         .eq('team_id', profile.team_id)
 
@@ -48,8 +64,8 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
-  const supabase = await createClient()
+    const { id } = await params
+    const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
 
