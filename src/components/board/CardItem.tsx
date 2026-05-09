@@ -1,9 +1,12 @@
 "use client"
 
-import { CheckCircle2 } from "lucide-react"
+import { CheckCircle2, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useState } from "react"
+import { createPortal } from "react-dom"
 
 import EditCardButton from "@/components/board/EditCardButton"
+import { Button } from "@/components/ui/button"
 
 type Card = {
   id: string
@@ -30,6 +33,34 @@ function formatWhen(value: string | null | undefined) {
 
 export default function CardItem({ card }: Props) {
   const router = useRouter()
+  const [deleting, setDeleting] = useState(false)
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  async function deleteCard() {
+    setDeleteError(null)
+
+    try {
+      setDeleting(true)
+      const res = await fetch(`/api/cards/${card.id}`, {
+        method: "DELETE",
+      })
+
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null
+        throw new Error(payload?.error || "Failed to delete card")
+      }
+
+      setConfirmDeleteOpen(false)
+      router.refresh()
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Something went wrong")
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   const isGreen = card.status === "green"
   const when = formatWhen(card.created_at)
@@ -60,8 +91,63 @@ export default function CardItem({ card }: Props) {
             initialContent={card.content}
             onSuccess={() => router.refresh()}
           />
+          <button
+            type="button"
+            className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
+            aria-label="Delete"
+            disabled={deleting}
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeleteError(null)
+              setConfirmDeleteOpen(true)
+            }}
+          >
+            <Trash2 className="h-[16px] w-[16px]" />
+          </button>
         </div>
       </div>
+
+      {confirmDeleteOpen
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+              onClick={() => setConfirmDeleteOpen(false)}
+            >
+              <div
+                className="w-[420px] min-w-[420px] rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal="true"
+              >
+                <div className="font-h3 text-on-surface text-[16px] leading-[20px] mb-2 whitespace-nowrap">
+                  Delete this card?
+                </div>
+                <div className="font-body-md text-on-surface-variant text-sm">
+                  This action cannot be undone.
+                </div>
+
+                {deleteError ? (
+                  <div className="mt-2 text-sm text-destructive">{deleteError}</div>
+                ) : null}
+
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => setConfirmDeleteOpen(false)}
+                    disabled={deleting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={deleteCard} disabled={deleting}>
+                    {deleting ? "Deleting…" : "Delete"}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </div>
   )
 }
