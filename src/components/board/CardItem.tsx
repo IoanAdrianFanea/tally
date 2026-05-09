@@ -1,6 +1,9 @@
 "use client"
 
-import { CheckCircle2, Pencil } from "lucide-react"
+import { CheckCircle2 } from "lucide-react"
+import { useRouter } from "next/navigation"
+
+import EditCardButton from "@/components/board/EditCardButton"
 
 type Card = {
   id: string
@@ -26,6 +29,8 @@ function formatWhen(value: string | null | undefined) {
 }
 
 export default function CardItem({ card }: Props) {
+  const router = useRouter()
+
   const isGreen = card.status === "green"
   const when = formatWhen(card.created_at)
 
@@ -50,13 +55,11 @@ export default function CardItem({ card }: Props) {
       <div className="flex justify-between items-end mt-sm">
         <span className="font-label-sm text-outline-variant">{when ?? ""}</span>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs">
-          <button
-            type="button"
-            className="text-outline hover:text-primary transition-colors"
-            aria-label="Edit"
-          >
-            <Pencil className="h-[16px] w-[16px]" />
-          </button>
+          <EditCardButton
+            cardId={card.id}
+            initialContent={card.content}
+            onSuccess={() => router.refresh()}
+          />
         </div>
       </div>
     </div>

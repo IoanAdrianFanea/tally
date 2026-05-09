@@ -2,20 +2,24 @@
 
 import { useState } from "react"
 import { createPortal } from "react-dom"
-import { Plus } from "lucide-react"
+import { Pencil } from "lucide-react"
 
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
 type Props = {
-  ownerId: string
-  teamId: string
+  cardId: string
+  initialContent: string
   onSuccess: () => void
 }
 
-export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
+export default function EditCardButton({
+  cardId,
+  initialContent,
+  onSuccess,
+}: Props) {
   const [open, setOpen] = useState(false)
-  const [content, setContent] = useState("")
+  const [content, setContent] = useState(initialContent)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -30,8 +34,8 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
 
     try {
       setSubmitting(true)
-      const res = await fetch("/api/cards", {
-        method: "POST",
+      const res = await fetch(`/api/cards/${cardId}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: trimmed }),
       })
@@ -40,11 +44,10 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
         const payload = (await res.json().catch(() => null)) as
           | { error?: string }
           | null
-        throw new Error(payload?.error || "Failed to create card")
+        throw new Error(payload?.error || "Failed to update card")
       }
 
       setOpen(false)
-      setContent("")
       onSuccess()
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong")
@@ -57,14 +60,16 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
     <>
       <button
         type="button"
-        className="mt-xs text-outline hover:text-on-surface hover:bg-surface-container-low transition-colors font-body-md py-sm rounded-lg flex items-center justify-center gap-xs border border-transparent hover:border-surface-variant border-dashed w-full"
-        onClick={() => {
+        className="text-outline hover:text-primary transition-colors"
+        aria-label="Edit"
+        onClick={(e) => {
+          e.stopPropagation()
           setError(null)
+          setContent(initialContent)
           setOpen(true)
         }}
       >
-        <Plus className="h-[18px] w-[18px]" />
-        Add card
+        <Pencil className="h-[16px] w-[16px]" />
       </button>
 
       {open
@@ -80,7 +85,7 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
                 aria-modal="true"
               >
                 <div className="font-h3 text-on-surface text-[16px] leading-[20px] mb-3 whitespace-nowrap">
-                  Add a card
+                  Edit a card
                 </div>
 
                 <div className="space-y-2">
@@ -112,13 +117,8 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
                     onClick={submit}
                     disabled={submitting}
                   >
-                    {submitting ? "Submitting…" : "Submit"}
+                    {submitting ? "Saving…" : "Save"}
                   </Button>
-                </div>
-
-                {/* keep props referenced so they remain part of the public API */}
-                <div className="sr-only" aria-hidden="true">
-                  {ownerId} {teamId}
                 </div>
               </div>
             </div>,
