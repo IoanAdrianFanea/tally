@@ -90,23 +90,89 @@ export default function CardItem({ card, role }: Props) {
   const isGreen = card.status === "green"
   const when = formatWhen(card.created_at)
 
+  const confirmDeleteModal = confirmDeleteOpen
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            setConfirmDeleteOpen(false)
+          }}
+        >
+          <div
+            className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="font-h3 text-on-surface text-[16px] leading-[20px] mb-2 whitespace-nowrap">
+              Delete this card?
+            </div>
+            <div className="font-body-md text-on-surface-variant text-sm">
+              This action cannot be undone.
+            </div>
+
+            {deleteError ? (
+              <div className="mt-2 text-sm text-destructive">{deleteError}</div>
+            ) : null}
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setConfirmDeleteOpen(false)}
+                disabled={deleting}
+              >
+                Cancel
+              </Button>
+              <Button type="button" onClick={deleteCard} disabled={deleting}>
+                {deleting ? "Deleting…" : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null
+
   if (isGreen) {
     return (
-      <div
-        ref={setNodeRef}
-        style={dndStyle}
-        {...attributes}
-        {...listeners}
-        className="group bg-[#f0fdf4] rounded-lg border border-[#bbf7d0] shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-md relative overflow-hidden"
-      >
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#22c55e]" />
-        <div className="flex items-start gap-sm">
-          <CheckCircle2 className="text-[#22c55e] h-4.5 w-4.5 mt-0.5" />
-          <p className="font-body-md text-on-surface line-through opacity-70">
-            {card.content}
-          </p>
+      <>
+        <div
+          ref={setNodeRef}
+          style={dndStyle}
+          {...attributes}
+          {...listeners}
+          className="group bg-[#f0fdf4] rounded-lg border border-[#bbf7d0] shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-md relative overflow-hidden"
+        >
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#22c55e]" />
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              type="button"
+              className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
+              aria-label="Delete"
+              disabled={deleting}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                setDeleteError(null)
+                setConfirmDeleteOpen(true)
+              }}
+            >
+              <Trash2 className="h-[16px] w-[16px]" />
+            </button>
+          </div>
+          <div className="flex items-start gap-sm">
+            <CheckCircle2 className="text-[#22c55e] h-4.5 w-4.5 mt-0.5" />
+            <p className="font-body-md text-on-surface line-through opacity-70">
+              {card.content}
+            </p>
+          </div>
         </div>
-      </div>
+        {confirmDeleteModal}
+      </>
     )
   }
 
@@ -164,52 +230,7 @@ export default function CardItem({ card, role }: Props) {
         </div>
       </div>
 
-      {confirmDeleteOpen
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                setConfirmDeleteOpen(false)
-              }}
-            >
-              <div
-                className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-modal="true"
-              >
-                <div className="font-h3 text-on-surface text-[16px] leading-[20px] mb-2 whitespace-nowrap">
-                  Delete this card?
-                </div>
-                <div className="font-body-md text-on-surface-variant text-sm">
-                  This action cannot be undone.
-                </div>
-
-                {deleteError ? (
-                  <div className="mt-2 text-sm text-destructive">{deleteError}</div>
-                ) : null}
-
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => setConfirmDeleteOpen(false)}
-                    disabled={deleting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button type="button" onClick={deleteCard} disabled={deleting}>
-                    {deleting ? "Deleting…" : "Delete"}
-                  </Button>
-                </div>
-              </div>
-            </div>,
-            document.body
-          )
-        : null}
+      {confirmDeleteModal}
     </div>
   )
 }
