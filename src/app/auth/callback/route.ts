@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { cookies } from "next/headers"
 import { NextResponse, type NextRequest } from "next/server"
+import { logActivity } from "@/lib/activity"
 
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
@@ -37,6 +38,26 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     return NextResponse.redirect(new URL("/login?error=auth_failed", request.url))
+  }
+
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (user) {
+  const { data: profile } = await supabase
+    .from('users')
+    .select('team_id')
+    .eq('id', user.id)
+    .single()
+
+    if (profile) {
+      await logActivity(supabase, {
+        team_id: profile.team_id,
+        user_id: user.id,
+        action_type: 'user_logged_in',
+        card_id: null,
+        metadata: {}
+      })
+    }
   }
 
   return NextResponse.redirect(new URL("/board", request.url))

@@ -2,6 +2,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse, type NextRequest } from "next/server"
+import { logActivity } from "@/lib/activity"
 
 export async function GET(request: NextRequest) { 
     const supabase = await createClient()
@@ -115,5 +116,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
   
+  await logActivity(supabase, {
+    team_id: profile.team_id,
+    user_id: user.id,
+    action_type: 'card_created',
+    card_id: card.id,
+    metadata: {
+      content: card.content,
+      owner_id: card.owner_id
+    }
+  })
+
   return NextResponse.json({ card }, { status: 201 })
 }

@@ -1,6 +1,6 @@
 // changing and removing cards
 
-
+import { logActivity } from "@/lib/activity"
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse, type NextRequest } from "next/server"
 
@@ -34,6 +34,7 @@ export async function PATCH(
     }
 
     const update: Record<string, unknown> = {}
+
     if (typeof body.content === 'string') update.content = body.content
     if (typeof body.position === 'number' && Number.isFinite(body.position)) {
         update.position = body.position
@@ -46,6 +47,12 @@ export async function PATCH(
         return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
     }
 
+    const { data: existingCard } = await supabase
+        .from('cards')
+        .select('content, owner_id')
+        .eq('id', id)
+        .single()
+
     const { error } = await supabase
         .from('cards')
         .update(update)
@@ -55,6 +62,23 @@ export async function PATCH(
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    const actionType = body.owner_id && body.owner_id !== existingCard?.owner_id
+        ? 'card_moved'
+        : 'card_updated'
+
+    await logActivity(supabase, {
+        team_id: profile.team_id,
+        user_id: user.id,
+        action_type: actionType,  // ← dynamic
+        card_id: id,
+        metadata: {
+            old_content: existingCard?.content,
+            new_content: (body.content as string) ?? existingCard?.content,
+            old_owner_id: existingCard?.owner_id,
+            new_owner_id: (body.owner_id as string) ?? existingCard?.owner_id
+        }
+    })
 
     return NextResponse.json({ message: 'Card updated successfully' }, { status: 200 })
 
@@ -83,6 +107,12 @@ export async function DELETE(
         return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
     }
     
+    const { data: existingCard } = await supabase
+        .from('cards')
+        .select('content, owner_id')
+        .eq('id', id)
+        .single()
+
     const { error } = await supabase
         .from('cards')
         .delete()
@@ -92,6 +122,17 @@ export async function DELETE(
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    await logActivity(supabase, {
+        team_id: profile.team_id,
+        user_id: user.id,
+        action_type: 'card_deleted',
+        card_id: null, // ← card is deleted, so we can't reference it by ID
+        metadata: {
+            content: existingCard?.content,
+            owner_id: existingCard?.owner_id
+        }
+      })
 
     return NextResponse.json({ message: 'Card deleted successfully' }, { status: 200 })
 }

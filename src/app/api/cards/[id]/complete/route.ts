@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse, type NextRequest } from "next/server"
+import { logActivity } from "@/lib/activity"
 
 export async function POST(
   request: NextRequest,
@@ -42,8 +43,17 @@ export async function POST(
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    await logActivity(supabase, {
+        team_id: profile.team_id,
+        user_id: user.id,
+        action_type: 'card_completed',
+        card_id: id,
+        metadata: {
+            content: data.content,
+            owner_id: data.owner_id
+        }
+    })
+
     return NextResponse.json({ message: 'Card updated successfully' }, { status: 200 })
-
-
 
 }
