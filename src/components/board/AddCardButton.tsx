@@ -70,11 +70,16 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
       {open
         ? createPortal(
             <div
-              className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4"
-              onClick={() => setOpen(false)}
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                setOpen(false)
+              }}
             >
               <div
                 className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
+                onPointerDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
                 aria-modal="true"
