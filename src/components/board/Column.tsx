@@ -92,7 +92,6 @@ export default function Column({ user, cards, role, currentUserId }: Props) {
       {role === "admin" || user.id === currentUserId ? (
         <AddCardButton
           ownerId={user.id}
-          teamId={user.team_id ?? ""}
           onSuccess={() => router.refresh()}
         />
       ) : null}

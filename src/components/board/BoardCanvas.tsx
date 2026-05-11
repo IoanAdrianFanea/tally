@@ -1,8 +1,7 @@
 "use client"
 
 import { createClient } from "@/lib/supabase/client"
-import { useEffect } from "react"
-import { startTransition, useOptimistic } from "react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   DndContext,
@@ -76,10 +75,11 @@ function groupAndNormalize(users: User[], cards: Card[]) {
 export default function BoardCanvas({ users, cards, role, currentUserId, teamId }: Props) {
   const router = useRouter()
 
-  const [optimisticCards, setOptimisticCards] = useOptimistic<Card[], Card[]>(
-    cards,
-    (_state, next: Card[]) => next
-  )
+  const [optimisticCards, setOptimisticCards] = useState<Card[]>(cards)
+
+  useEffect(() => {
+    setOptimisticCards(cards)
+  }, [cards])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -104,30 +104,27 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
       {
         event: '*',
         schema: 'public',
-        table: 'cards',
-        filter: `team_id=eq.${teamId}`
+        table: 'cards'
+        // ← remove the filter entirely
       },
       (payload) => {
+        
         if (payload.eventType === 'INSERT') {
-          startTransition(() => {
-            setOptimisticCards([...optimisticCards, payload.new as Card])
-          })
+          setOptimisticCards(prev => [...prev, payload.new as Card])
+        }
+        
+        if (payload.eventType === 'INSERT') {
+          setOptimisticCards(prev => [...prev, payload.new as Card])
         }
         if (payload.eventType === 'UPDATE') {
-          startTransition(() => {
-            setOptimisticCards(
-              optimisticCards.map(c => 
-                c.id === (payload.new as Card).id ? payload.new as Card : c
-              )
-            )
-          })
+          setOptimisticCards(prev =>
+            prev.map(c => c.id === (payload.new as Card).id ? payload.new as Card : c)
+          )
         }
         if (payload.eventType === 'DELETE') {
-          startTransition(() => {
-            setOptimisticCards(
-              optimisticCards.filter(c => c.id !== (payload.old as Card).id)
-            )
-          })
+          setOptimisticCards(prev =>
+            prev.filter(c => c.id !== (payload.old as Card).id)
+          )
         }
       }
       )
@@ -203,9 +200,7 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
     }
 
     const nextOptimisticCards = Object.values(byOwner).flat()
-    startTransition(() => {
-      setOptimisticCards(nextOptimisticCards)
-    })
+    setOptimisticCards(nextOptimisticCards)
 
     const newPosition = (byOwner[overOwner] ?? []).findIndex(
       (c) => c.id === activeId

@@ -9,11 +9,10 @@ import { Button } from "@/components/ui/button"
 
 type Props = {
   ownerId: string
-  teamId: string
   onSuccess: () => void
 }
 
-export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
+export default function AddCardButton({ ownerId, onSuccess }: Props) {
   const [open, setOpen] = useState(false)
   const [content, setContent] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -119,11 +118,6 @@ export default function AddCardButton({ ownerId, teamId, onSuccess }: Props) {
                   >
                     {submitting ? "Submitting…" : "Submit"}
                   </Button>
-                </div>
-
-                {/* keep props referenced so they remain part of the public API */}
-                <div className="sr-only" aria-hidden="true">
-                  {ownerId} {teamId}
                 </div>
               </div>
             </div>,
