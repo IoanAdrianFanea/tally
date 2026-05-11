@@ -28,6 +28,7 @@ type Props = {
   cards: Card[]
   role: string
   currentUserId: string
+  teamId: string
 }
 
 export default function BoardCanvasShell(props: Props) {

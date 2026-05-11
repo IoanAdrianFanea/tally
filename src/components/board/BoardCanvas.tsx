@@ -1,5 +1,7 @@
 "use client"
 
+import { createClient } from "@/lib/supabase/client"
+import { useEffect } from "react"
 import { startTransition, useOptimistic } from "react"
 import { useRouter } from "next/navigation"
 import {
@@ -41,6 +43,7 @@ type Props = {
   cards: Card[]
   role: string
   currentUserId: string
+  teamId: string
 }
 
 function groupAndNormalize(users: User[], cards: Card[]) {
@@ -70,10 +73,10 @@ function groupAndNormalize(users: User[], cards: Card[]) {
   return byOwner
 }
 
-export default function BoardCanvas({ users, cards, role, currentUserId }: Props) {
+export default function BoardCanvas({ users, cards, role, currentUserId, teamId }: Props) {
   const router = useRouter()
 
-  const [optimisticCards, setOptimisticCards] = useOptimistic(
+  const [optimisticCards, setOptimisticCards] = useOptimistic<Card[], Card[]>(
     cards,
     (_state, next: Card[]) => next
   )
@@ -90,6 +93,50 @@ export default function BoardCanvas({ users, cards, role, currentUserId }: Props
     const card = optimisticCards.find((c) => c.id === id)
     return card ? card.owner_id : null
   }
+
+  useEffect(() => {
+  const supabase = createClient()
+
+  const channel = supabase
+    .channel('cards-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'cards',
+        filter: `team_id=eq.${teamId}`
+      },
+      (payload) => {
+        if (payload.eventType === 'INSERT') {
+          startTransition(() => {
+            setOptimisticCards([...optimisticCards, payload.new as Card])
+          })
+        }
+        if (payload.eventType === 'UPDATE') {
+          startTransition(() => {
+            setOptimisticCards(
+              optimisticCards.map(c => 
+                c.id === (payload.new as Card).id ? payload.new as Card : c
+              )
+            )
+          })
+        }
+        if (payload.eventType === 'DELETE') {
+          startTransition(() => {
+            setOptimisticCards(
+              optimisticCards.filter(c => c.id !== (payload.old as Card).id)
+            )
+          })
+        }
+      }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [teamId])
 
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event

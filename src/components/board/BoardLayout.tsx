@@ -136,6 +136,7 @@ export default function BoardLayout({
             cards={cards}
             role={role}
             currentUserId={currentUserId}
+            teamId={profile?.team_id ?? ''}
           />
 
           <div className="bg-surface-container-lowest border-t border-surface-variant p-md flex flex-wrap items-center gap-md">
