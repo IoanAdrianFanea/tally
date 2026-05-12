@@ -1,6 +1,7 @@
-import { BarChart3, LayoutGrid, Search, Settings, Trophy } from "lucide-react"
+import { LayoutGrid, Search, Settings, Trophy } from "lucide-react"
 
 import BoardCanvasShell from "@/components/board/BoardCanvasShell"
+import LeaderboardPanel from "@/components/board/LeaderboardPanel"
 
 type User = {
   id: string
@@ -48,6 +49,10 @@ export default function BoardLayout({
     year: "numeric",
   }).format(new Date())
 
+  const currentUserPoints =
+    users.find((u) => u.id === currentUserId)?.points ?? 0
+  const pointsLabel = new Intl.NumberFormat("en-US").format(currentUserPoints)
+
   return (
     <div className="bg-background text-on-surface h-screen flex flex-col overflow-hidden">
       <nav className="bg-surface-container-lowest font-label-sm font-medium fixed top-0 w-full z-50 border-b border-surface-variant shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex justify-between items-center px-[24px] h-16">
@@ -67,7 +72,7 @@ export default function BoardLayout({
         <div className="flex items-center gap-md">
           <div className="flex items-center gap-sm bg-surface-container-low px-sm py-[4px] rounded-full border border-surface-variant">
             <span className="font-label-sm text-on-surface font-semibold">
-              1,250 pts
+              {pointsLabel} pts
             </span>
           </div>
           <div className="flex gap-sm">
@@ -112,13 +117,7 @@ export default function BoardLayout({
               <span className="font-body-md">Board</span>
             </a>
 
-            <a
-              className="flex items-center gap-md px-3 py-[8px] rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all active:translate-x-1 duration-150"
-              href="#"
-            >
-              <BarChart3 className="h-[20px] w-[20px]" />
-              <span className="font-body-md">Leaderboard</span>
-            </a>
+            <LeaderboardPanel currentUserId={currentUserId} />
 
             <a
               className="flex items-center gap-md px-3 py-[8px] rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all active:translate-x-1 duration-150 mt-auto"

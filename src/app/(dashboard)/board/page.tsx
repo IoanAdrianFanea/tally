@@ -20,7 +20,7 @@ export default async function BoardPage() {
     .eq("id", user.id)
     .single()
 
-  const { data: users} = await supabase    
+  const { data: users } = await supabase
     .from("users")
     .select("*")
     .eq("team_id", profile?.team_id)
@@ -33,11 +33,23 @@ export default async function BoardPage() {
     .eq("team_id", profile?.team_id)  // ← fixed
     .eq("month_key", monthKey)         // ← add this
     .order("position", { ascending: true })
+
+  const pointsByOwner: Record<string, number> = {}
+  for (const card of cards ?? []) {
+    if (card.status === "green") {
+      pointsByOwner[card.owner_id] = (pointsByOwner[card.owner_id] || 0) + 1
+    }
+  }
+
+  const usersWithPoints = (users ?? []).map((user) => ({
+    ...user,
+    points: pointsByOwner[user.id] || 0,
+  }))
       
 
   return (
     <BoardLayout
-      users={users ?? []}
+      users={usersWithPoints}
       cards={cards ?? []}
       profile={profile}
       role={profile?.role ?? "member"}
