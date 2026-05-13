@@ -32,8 +32,8 @@ export async function POST(
     const { data, error } = await supabase
         .from('cards')
         .update({ 
-            status: 'green',
-            completed_at: new Date().toISOString()
+            status: 'open',
+            completed_at: null
         })
         .eq('id', id)
         .select()
@@ -46,7 +46,7 @@ export async function POST(
     await logActivity(supabase, {
         team_id: profile.team_id,
         user_id: user.id,
-        action_type: 'card_completed',
+        action_type: 'card_reopened',
         card_id: id,
         metadata: {
             content: data.content,

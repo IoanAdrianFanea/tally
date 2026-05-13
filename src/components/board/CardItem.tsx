@@ -1,6 +1,6 @@
 "use client"
 
-import { CheckCircle2, Trash2 } from "lucide-react"
+import { CheckCircle2, RotateCcw, Trash2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
@@ -60,20 +60,13 @@ export default function CardItem({ card, role }: Props) {
 
   async function deleteCard() {
     setDeleteError(null)
-
     try {
       setDeleting(true)
-      const res = await fetch(`/api/cards/${card.id}`, {
-        method: "DELETE",
-      })
-
+      const res = await fetch(`/api/cards/${card.id}`, { method: "DELETE" })
       if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as
-          | { error?: string }
-          | null
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null
         throw new Error(payload?.error || "Failed to delete card")
       }
-
       setConfirmDeleteOpen(false)
       router.refresh()
     } catch (err) {
@@ -84,9 +77,12 @@ export default function CardItem({ card, role }: Props) {
   }
 
   async function completeCard() {
-    const res = await fetch(`/api/cards/${card.id}/complete`, {
-      method: 'POST',
-    })
+    const res = await fetch(`/api/cards/${card.id}/complete`, { method: "POST" })
+    if (res.ok) router.refresh()
+  }
+
+  async function reopenCard() {
+    const res = await fetch(`/api/cards/${card.id}/reopen`, { method: "POST" })
     if (res.ok) router.refresh()
   }
 
@@ -99,10 +95,7 @@ export default function CardItem({ card, role }: Props) {
         <div
           className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            setConfirmDeleteOpen(false)
-          }}
+          onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false) }}
         >
           <div
             className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
@@ -117,18 +110,11 @@ export default function CardItem({ card, role }: Props) {
             <div className="font-body-md text-on-surface-variant text-sm">
               This action cannot be undone.
             </div>
-
-            {deleteError ? (
+            {deleteError && (
               <div className="mt-2 text-sm text-destructive">{deleteError}</div>
-            ) : null}
-
+            )}
             <div className="mt-4 flex justify-end gap-2">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setConfirmDeleteOpen(false)}
-                disabled={deleting}
-              >
+              <Button type="button" variant="secondary" onClick={() => setConfirmDeleteOpen(false)} disabled={deleting}>
                 Cancel
               </Button>
               <Button type="button" onClick={deleteCard} disabled={deleting}>
@@ -152,24 +138,34 @@ export default function CardItem({ card, role }: Props) {
           className="group bg-[#f0fdf4] rounded-lg border border-[#bbf7d0] shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-md relative overflow-hidden"
         >
           <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#22c55e]" />
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+
+          {/* Green card action buttons — top right */}
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs items-center">
+            {role === 'admin' && (
+              <button
+                type="button"
+                className="text-outline hover:text-amber-500 transition-colors"
+                aria-label="Reopen card"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); reopenCard() }}
+              >
+                <RotateCcw className="h-[16px] w-[16px]" />
+              </button>
+            )}
             <button
               type="button"
               className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
               aria-label="Delete"
               disabled={deleting}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                setDeleteError(null)
-                setConfirmDeleteOpen(true)
-              }}
+              onClick={(e) => { e.stopPropagation(); setDeleteError(null); setConfirmDeleteOpen(true) }}
             >
               <Trash2 className="h-[16px] w-[16px]" />
             </button>
           </div>
+
           <div className="flex items-start gap-sm">
-            <CheckCircle2 className="text-[#22c55e] h-4.5 w-4.5 mt-0.5" />
+            <CheckCircle2 className="text-[#22c55e] h-4.5 w-4.5 mt-0.5 shrink-0" />
             <p className="font-body-md text-on-surface line-through opacity-70">
               {card.content}
             </p>
@@ -186,62 +182,51 @@ export default function CardItem({ card, role }: Props) {
   }
 
   return (
-    <div
-      ref={setNodeRef}
-      style={dndStyle}
-      {...attributes}
-      {...listeners}
-      className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-200 p-md relative overflow-hidden cursor-pointer"
-    >
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-(--column-accent) opacity-50" />
-      <p className="font-body-md text-on-surface mb-sm">{card.content}</p>
-      <div className="flex justify-between items-end mt-sm">
-        <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
-          {when ?? ""}
-        </span>
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs">
-  
-          <EditCardButton
-            cardId={card.id}
-            initialContent={card.content}
-            onSuccess={() => router.refresh()}
-          />
-
-          {role === 'admin' && (
+    <>
+      <div
+        ref={setNodeRef}
+        style={dndStyle}
+        {...attributes}
+        {...listeners}
+        className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-200 p-md relative overflow-hidden cursor-pointer"
+      >
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-(--column-accent) opacity-50" />
+        <p className="font-body-md text-on-surface mb-sm">{card.content}</p>
+        <div className="flex justify-between items-end mt-sm">
+          <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
+            {when ?? ""}
+          </span>
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs items-center">
+            <EditCardButton
+              cardId={card.id}
+              initialContent={card.content}
+              onSuccess={() => router.refresh()}
+            />
+            {role === 'admin' && (
+              <button
+                type="button"
+                className="text-outline hover:text-green-500 transition-colors"
+                aria-label="Mark complete"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); completeCard() }}
+              >
+                <CheckCircle2 className="h-[16px] w-[16px]" />
+              </button>
+            )}
             <button
               type="button"
-              className="text-outline hover:text-green-500 transition-colors"
-              aria-label="Mark complete"
+              className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
+              aria-label="Delete"
+              disabled={deleting}
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                completeCard()
-              }}
+              onClick={(e) => { e.stopPropagation(); setDeleteError(null); setConfirmDeleteOpen(true) }}
             >
-              <CheckCircle2 className="h-[16px] w-[16px]" />
+              <Trash2 className="h-[16px] w-[16px]" />
             </button>
-          )}
-
-          {/* Delete button */}
-          <button
-            type="button"
-            className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
-            aria-label="Delete"
-            disabled={deleting}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={(e) => {
-              e.stopPropagation()
-              setDeleteError(null)
-              setConfirmDeleteOpen(true)
-            }}
-          >
-            <Trash2 className="h-[16px] w-[16px]" />
-          </button>
-
+          </div>
         </div>
       </div>
-
       {confirmDeleteModal}
-    </div>
+    </>
   )
 }
