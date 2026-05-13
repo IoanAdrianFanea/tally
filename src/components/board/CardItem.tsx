@@ -89,6 +89,28 @@ export default function CardItem({ card, role }: Props) {
   const isGreen = card.status === "green"
   const when = formatWhen(card.created_at)
   const completedWhen = formatWhen(card.completed_at)
+  const now = new Date()
+  const created = card.created_at ? new Date(card.created_at) : null
+  const daysOld = created
+    ? Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
+    : 0
+  const isStale = !isGreen && daysOld >= 1
+  const staleOpacityClass = isStale
+    ? daysOld >= 7
+      ? " opacity-70"
+      : daysOld >= 3
+        ? " opacity-80"
+        : " opacity-90"
+    : ""
+  const staleBorderClass = isStale
+    ? daysOld >= 7
+      ? "bg-orange-600"
+      : daysOld >= 3
+        ? "bg-orange-400"
+        : "bg-orange-200"
+    : ""
+  const showOverdueLabel = isStale && daysOld >= 3
+  const overdueTextClass = daysOld >= 7 ? "text-orange-600" : "text-orange-400"
 
   const confirmDeleteModal = confirmDeleteOpen
     ? createPortal(
@@ -188,14 +210,25 @@ export default function CardItem({ card, role }: Props) {
         style={dndStyle}
         {...attributes}
         {...listeners}
-        className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-200 p-md relative overflow-hidden cursor-pointer"
+        className={`group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-200 p-md relative overflow-hidden cursor-pointer${staleOpacityClass}`}
       >
-        <div className="absolute top-0 left-0 right-0 h-0.5 bg-(--column-accent) opacity-50" />
+        {isStale ? (
+          <div className={`absolute left-0 top-0 bottom-0 w-1 ${staleBorderClass}`} />
+        ) : (
+          <div className="absolute top-0 left-0 right-0 h-0.5 bg-(--column-accent) opacity-50" />
+        )}
         <p className="font-body-md text-on-surface mb-sm">{card.content}</p>
         <div className="flex justify-between items-end mt-sm">
-          <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
-            {when ?? ""}
-          </span>
+          <div className="flex items-end gap-2">
+            {showOverdueLabel && (
+              <span className={`font-label-sm text-xs ${overdueTextClass}`}>
+                Overdue
+              </span>
+            )}
+            <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
+              {when ?? ""}
+            </span>
+          </div>
           <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs items-center">
             <EditCardButton
               cardId={card.id}
