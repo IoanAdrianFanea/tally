@@ -16,6 +16,7 @@ type Card = {
   owner_id: string
   status: string | null
   created_at?: string | null
+  completed_at?: string | null
 }
 
 type Props = {
@@ -31,6 +32,8 @@ function formatWhen(value: string | null | undefined) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(date)
 }
 
@@ -89,6 +92,7 @@ export default function CardItem({ card, role }: Props) {
 
   const isGreen = card.status === "green"
   const when = formatWhen(card.created_at)
+  const completedWhen = formatWhen(card.completed_at)
 
   const confirmDeleteModal = confirmDeleteOpen
     ? createPortal(
@@ -170,6 +174,11 @@ export default function CardItem({ card, role }: Props) {
               {card.content}
             </p>
           </div>
+          <div className="mt-sm">
+            <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
+              Completed {completedWhen ?? ""}
+            </span>
+          </div>
         </div>
         {confirmDeleteModal}
       </>
@@ -187,7 +196,9 @@ export default function CardItem({ card, role }: Props) {
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-(--column-accent) opacity-50" />
       <p className="font-body-md text-on-surface mb-sm">{card.content}</p>
       <div className="flex justify-between items-end mt-sm">
-        <span className="font-label-sm text-outline-variant">{when ?? ""}</span>
+        <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
+          {when ?? ""}
+        </span>
         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs">
   
           <EditCardButton

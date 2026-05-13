@@ -30,10 +30,10 @@ export default async function BoardPage() {
   const { data: cards } = await supabase
     .from("cards")
     .select("*")
-    .eq("team_id", profile?.team_id)  // ← fixed
-    .eq("month_key", monthKey)         // ← add this
+    .eq("team_id", profile?.team_id)  
+    .eq("month_key", monthKey)         
     .order("position", { ascending: true })
-
+    
   const pointsByOwner: Record<string, number> = {}
   for (const card of cards ?? []) {
     if (card.status === "green") {
