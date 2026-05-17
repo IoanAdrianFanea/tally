@@ -5,10 +5,10 @@ import { createClient } from "@/lib/supabase/server"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+    request: NextRequest,
+    context: { params: Promise<{ id: string }> }
 ) {
-    const { id } = await params 
+    const { id } = await context.params
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
@@ -85,9 +85,10 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  { params }: { params: Promise<{ id: string }> }
+    _request: NextRequest,
+    context: { params: Promise<{ id: string }> }
 ) {
-    const { id } = await params
+    const { id } = await context.params
     const supabase = await createClient()
 
     const { data: { user } } = await supabase.auth.getUser()
