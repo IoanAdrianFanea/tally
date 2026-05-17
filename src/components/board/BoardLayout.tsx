@@ -1,6 +1,7 @@
-import { LayoutGrid, Search, Settings, Trophy } from "lucide-react"
+import { LayoutGrid, Settings, Trophy } from "lucide-react"
 
 import BoardCanvasShell from "@/components/board/BoardCanvasShell"
+import SearchBar from "@/components/board/SearchBar"
 import LeaderboardPanel from "@/components/board/LeaderboardPanel"
 
 type User = {
@@ -28,6 +29,7 @@ type Props = {
   profile: Profile | null
   role: string
   currentUserId?: string
+  hasSearch?: boolean
 }
 
 function getInitials(name: string | null | undefined) {
@@ -41,6 +43,7 @@ export default function BoardLayout({
   profile,
   role,
   currentUserId: currentUserIdProp,
+  hasSearch,
 }: Props) {
   const currentUserId = currentUserIdProp ?? profile?.id ?? ""
 
@@ -138,31 +141,7 @@ export default function BoardLayout({
             teamId={profile?.team_id ?? ''}
           />
 
-          <div className="bg-surface-container-lowest border-t border-surface-variant p-md flex flex-wrap items-center gap-md">
-            <div className="flex-1 min-w-50 relative">
-              <Search className="absolute left-sm top-1/2 -translate-y-1/2 text-outline h-[20px] w-[20px]" />
-              <input
-                className="w-full pl-9 pr-sm py-[8px] bg-surface-container-low border border-surface-variant rounded-lg font-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-outline-variant"
-                placeholder="Search cards..."
-                type="text"
-              />
-            </div>
-
-            <div className="flex items-center gap-sm">
-              <select className="bg-surface-container-low border border-surface-variant rounded-lg font-body-md text-on-surface px-sm py-[8px] focus:outline-none focus:border-primary">
-                <option>All People</option>
-                {users.map((u) => (
-                  <option key={u.id}>{u.display_name}</option>
-                ))}
-              </select>
-              <select className="bg-surface-container-low border border-surface-variant rounded-lg font-body-md text-on-surface px-sm py-[8px] focus:outline-none focus:border-primary">
-                <option>Any Date</option>
-                <option>Today</option>
-                <option>This Week</option>
-                <option>Next Week</option>
-              </select>
-            </div>
-          </div>
+          <SearchBar hasSearch={hasSearch} />
         </main>
       </div>
     </div>

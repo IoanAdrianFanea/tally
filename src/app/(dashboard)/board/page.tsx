@@ -3,7 +3,12 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import BoardLayout from "@/components/board/BoardLayout"
 
-export default async function BoardPage() {
+type BoardPageProps = {
+  searchParams: Promise<{ q?: string; date?: string }>
+}
+
+export default async function BoardPage({ searchParams }: BoardPageProps) {
+  const { q, date } = await searchParams
   const supabase = await createClient()
 
   const {
@@ -27,12 +32,58 @@ export default async function BoardPage() {
 
   const monthKey = new Date().toISOString().slice(0, 7)
 
-  const { data: cards } = await supabase
+  let cardsQuery = supabase
     .from("cards")
     .select("*")
-    .eq("team_id", profile?.team_id)  
-    .eq("month_key", monthKey)         
-    .order("position", { ascending: true })
+    .eq("team_id", profile?.team_id)
+    .eq("month_key", monthKey)
+
+  if (q) {
+    const prefixQuery = q
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((term) => term.replace(/[':]/g, ""))
+      .filter(Boolean)
+      .map((term) => `${term}:*`)
+      .join(" & ")
+
+    if (prefixQuery) {
+      cardsQuery = cardsQuery.filter("search_vector", "fts", prefixQuery)
+    }
+  }
+
+  if (date === "today") {
+    const now = new Date()
+    const startOfToday = new Date(now)
+    startOfToday.setHours(0, 0, 0, 0)
+
+    const endOfToday = new Date(now)
+    endOfToday.setHours(23, 59, 59, 999)
+
+    cardsQuery = cardsQuery
+      .gte("created_at", startOfToday.toISOString())
+      .lte("created_at", endOfToday.toISOString())
+  } else if (date === "week") {
+    const now = new Date()
+    const startOfMonday = new Date(now)
+    const day = startOfMonday.getDay()
+    const diffToMonday = (day + 6) % 7
+    startOfMonday.setDate(startOfMonday.getDate() - diffToMonday)
+    startOfMonday.setHours(0, 0, 0, 0)
+
+    cardsQuery = cardsQuery.gte("created_at", startOfMonday.toISOString())
+  } else if (date === "month") {
+    const now = new Date()
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+    startOfMonth.setHours(0, 0, 0, 0)
+
+    cardsQuery = cardsQuery.gte("created_at", startOfMonth.toISOString())
+  }
+
+  const { data: cards } = await cardsQuery.order("position", {
+    ascending: true,
+  })
     
   const pointsByOwner: Record<string, number> = {}
   for (const card of cards ?? []) {
@@ -47,6 +98,8 @@ export default async function BoardPage() {
   }))
       
 
+  const hasSearch = Boolean(q || date)
+
   return (
     <BoardLayout
       users={usersWithPoints}
@@ -54,6 +107,7 @@ export default async function BoardPage() {
       profile={profile}
       role={profile?.role ?? "member"}
       currentUserId={profile?.id ?? ""}
+      hasSearch={hasSearch}
     />
   )
 }
