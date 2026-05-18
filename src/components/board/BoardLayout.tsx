@@ -1,8 +1,9 @@
-import { LayoutGrid, Settings, Trophy } from "lucide-react"
+import { LayoutGrid, Trophy } from "lucide-react"
 
 import BoardCanvasShell from "@/components/board/BoardCanvasShell"
 import SearchBar from "@/components/board/SearchBar"
 import LeaderboardPanel from "@/components/board/LeaderboardPanel"
+import SettingsPanel from "@/components/board/SettingsPanel"
 
 type User = {
   id: string
@@ -122,13 +123,9 @@ export default function BoardLayout({
 
             <LeaderboardPanel currentUserId={currentUserId} />
 
-            <a
-              className="flex items-center gap-md px-3 py-[8px] rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all active:translate-x-1 duration-150 mt-auto"
-              href="#"
-            >
-              <Settings className="h-[20px] w-[20px]" />
-              <span className="font-body-md">Settings</span>
-            </a>
+            <div className="mt-auto">
+              <SettingsPanel isAdmin={role === "admin"} />
+            </div>
           </nav>
         </aside>
 
