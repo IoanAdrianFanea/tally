@@ -16,4 +16,8 @@
 ## Simplify menu (v2 idea)
 - remove menu so that elements can be accessed via hover buttons that are fixed on canvas
 
+## Archived data queriable (v1-v2 idea)
+- add a way to retrieve archived data cleanly
 
+## Team changing (v3 idea)
+- allow team changing and having multiple teams.
