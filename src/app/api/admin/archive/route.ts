@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { logActivity } from "@/lib/activity"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function POST(
@@ -67,7 +68,7 @@ export async function POST(
             id: card.id,
             content: card.content,
             owner_name: users?.find(user => user.id === card.owner_id)?.display_name || 'Unknown',
-            points: points[card.owner_id] || 0
+            points: card.status === 'green' ? 1 : 0
         })),
         points_by_user: points,
         users: users || [],
@@ -76,25 +77,26 @@ export async function POST(
 
     const { error: archiveError } = await supabase
     .from('archives')
-    .insert({
+    .upsert({
         team_id: profile.team_id,
         month_key: monthKey,
-        snapshot: response
+        snapshot: response,
+        is_manual: true
+    }, {
+        onConflict: 'team_id,month_key'
     })
 
     if (archiveError) {
     return NextResponse.json({ error: archiveError.message }, { status: 500 })
     }
 
-    const { error } = await supabase
-    .from('cards')
-    .delete()
-    .eq('team_id', profile.team_id)
-    .eq('month_key', monthKey)
-        
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    await logActivity(supabase, {
+            team_id: profile.team_id,
+            user_id: user.id,
+            action_type: "board_archived",
+            card_id: null,
+            metadata: { month_key: monthKey },
+        })
 
     return NextResponse.json({ success: true }, { status: 200 })
 

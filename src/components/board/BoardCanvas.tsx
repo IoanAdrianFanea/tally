@@ -79,7 +79,7 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
 
   useEffect(() => {
     setOptimisticCards(cards)
-  }, [cards])
+  }, [cards.length, cards.map(c => c.id + c.status + c.position).join(',')])
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -110,11 +110,19 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
       (payload) => {
         
         if (payload.eventType === 'INSERT') {
-          setOptimisticCards(prev => [...prev, payload.new as Card])
+          const newCard = payload.new as Card
+          setOptimisticCards(prev => {
+            if (prev.some(c => c.id === newCard.id)) return prev
+            return [...prev, newCard]
+          })
         }
         
         if (payload.eventType === 'INSERT') {
-          setOptimisticCards(prev => [...prev, payload.new as Card])
+          const newCard = payload.new as Card
+          setOptimisticCards(prev => {
+            if (prev.some(c => c.id === newCard.id)) return prev
+            return [...prev, newCard]
+          })
         }
         if (payload.eventType === 'UPDATE') {
           setOptimisticCards(prev =>
@@ -230,7 +238,12 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
     }
   }
 
-  const normalized = groupAndNormalize(users, optimisticCards)
+  const normalized = groupAndNormalize(
+    users,
+    optimisticCards.filter((card, index, self) =>
+      index === self.findLastIndex(c => c.id === card.id)
+    )
+  )
 
   return (
     <DndContext

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { createPortal } from "react-dom"
 import { Settings, X } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 import { Button } from "@/components/ui/button"
 
@@ -11,15 +12,61 @@ type Props = {
 }
 
 export default function SettingsPanel({ isAdmin }: Props) {
+  const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [archiveLoading, setArchiveLoading] = useState(false)
+  const [resetLoading, setResetLoading] = useState(false)
 
-  const confirmModal = confirmOpen
+  async function handleArchiveOnly() {
+    setArchiveLoading(true)
+    try {
+      const res = await fetch("/api/admin/archive", { method: "POST" })
+      if (!res.ok) {
+        const data = await res.json().catch(() => null)
+        alert("Failed to archive month: " + (data?.error ?? "Unknown error"))
+        return
+      }
+      setArchiveConfirmOpen(false)
+      setIsOpen(false)
+      router.refresh()
+    } finally {
+      setArchiveLoading(false)
+    }
+  }
+
+  async function handleArchiveAndReset() {
+    setResetLoading(true)
+    try {
+      const archiveRes = await fetch("/api/admin/archive", { method: "POST" })
+      if (!archiveRes.ok) {
+        const data = await archiveRes.json().catch(() => null)
+        alert("Failed to archive month: " + (data?.error ?? "Unknown error"))
+        return
+      }
+
+      const resetRes = await fetch("/api/admin/reset", { method: "POST" })
+      if (!resetRes.ok) {
+        const data = await resetRes.json().catch(() => null)
+        alert("Failed to reset month: " + (data?.error ?? "Unknown error"))
+        return
+      }
+
+      setResetConfirmOpen(false)
+      setIsOpen(false)
+      router.refresh()
+    } finally {
+      setResetLoading(false)
+    }
+  }
+
+  const archiveConfirmModal = archiveConfirmOpen
     ? createPortal(
         <div
           className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); setConfirmOpen(false) }}
+          onClick={(e) => { e.stopPropagation(); setArchiveConfirmOpen(false) }}
         >
           <div
             className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
@@ -32,23 +79,68 @@ export default function SettingsPanel({ isAdmin }: Props) {
               Are you sure?
             </div>
             <div className="font-body-md text-on-surface-variant text-sm">
-              This will archive all cards and reset the board. This cannot be undone.
+              This will save a snapshot of the current board. Cards will not be deleted. You can archive again later to update the snapshot.
             </div>
             <div className="mt-4 flex justify-end gap-2">
-              <Button type="button" variant="secondary" onClick={() => setConfirmOpen(false)}>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={archiveLoading}
+                onClick={() => setArchiveConfirmOpen(false)}
+              >
                 Cancel
               </Button>
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() => {
-                  // TODO: call archive endpoint here
-                  console.log("archive triggered")
-                  setConfirmOpen(false)
-                  setIsOpen(false)
-                }}
+                disabled={archiveLoading}
+                onClick={handleArchiveOnly}
               >
-                Confirm
+                {archiveLoading ? "Archiving..." : "Confirm"}
+              </Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )
+    : null
+
+  const resetConfirmModal = resetConfirmOpen
+    ? createPortal(
+        <div
+          className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); setResetConfirmOpen(false) }}
+        >
+          <div
+            className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="font-h3 text-on-surface text-[16px] leading-[20px] mb-2 whitespace-nowrap">
+              Are you sure?
+            </div>
+            <div className="font-body-md text-on-surface-variant text-sm">
+              This will save a snapshot of the current board and delete all cards. The board will be empty after this. This cannot be undone.
+            </div>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={resetLoading}
+                onClick={() => setResetConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={resetLoading}
+                onClick={handleArchiveAndReset}
+              >
+                {resetLoading ? "Archiving..." : "Confirm"}
               </Button>
             </div>
           </div>
@@ -103,18 +195,39 @@ export default function SettingsPanel({ isAdmin }: Props) {
             ) : (
               <section className="border border-surface-variant rounded-lg p-md bg-surface-container-low">
                 <h3 className="text-on-surface font-semibold mb-sm">Month management</h3>
-                <p className="text-outline text-sm mb-md">
-                  Archive the current month and reset the board for a new month. This action cannot be undone.
-                </p>
-                <Button type="button" variant="destructive" onClick={() => setConfirmOpen(true)}>
-                  Archive &amp; Reset Month
-                </Button>
+                <div className="space-y-md">
+                  <div className="space-y-sm">
+                    <p className="text-outline text-sm">
+                      Save a snapshot of the current board without deleting cards.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => setArchiveConfirmOpen(true)}
+                    >
+                      Archive month
+                    </Button>
+                  </div>
+                  <div className="space-y-sm">
+                    <p className="text-outline text-sm">
+                      Save a snapshot and delete all cards to start a new month.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={() => setResetConfirmOpen(true)}
+                    >
+                      Archive &amp; Reset
+                    </Button>
+                  </div>
+                </div>
               </section>
             )}
           </div>
         </aside>
       </div>
-      {confirmModal}
+      {archiveConfirmModal}
+      {resetConfirmModal}
     </>
   )
 }
