@@ -6,3 +6,14 @@
 
 ## Date picker (v2 idea)
 - Have a custom day picker for filtering which shows tasks created/completed dates only
+
+## Theme picker (v2 idea)
+- Custom column banners per user
+- Monthly sticker/emoji themes
+- Custom banner images
+- Weekly theme of the week with description
+
+## Simplify menu (v2 idea)
+- remove menu so that elements can be accessed via hover buttons that are fixed on canvas
+
+
