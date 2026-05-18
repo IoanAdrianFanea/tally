@@ -185,7 +185,7 @@ export default function SettingsPanel({ isAdmin }: Props) {
               onClick={() => setIsOpen(false)}
               aria-label="Close settings"
             >
-              <X className="h-[18px] w-[18px]" />
+              <X className="h-4.5 w-4.5" />
             </button>
           </div>
 
