@@ -39,3 +39,7 @@ Runs automatically on the 1st of each month:
 ### Related DB changes needed
 - `archives.is_manual boolean not null default false` — already added
 - `teams.auto_reset boolean not null default true` — add when building this feature
+
+### Team invite flow
+- admin invites by email, user gets magic link, automatically added to correct team and users table
+- admin can also manage users and modify teams

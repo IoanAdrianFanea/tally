@@ -1,9 +1,10 @@
-import { LayoutGrid, Trophy } from "lucide-react"
+import { Trophy } from "lucide-react"
 
 import BoardCanvasShell from "@/components/board/BoardCanvasShell"
 import SearchBar from "@/components/board/SearchBar"
 import LeaderboardPanel from "@/components/board/LeaderboardPanel"
 import SettingsPanel from "@/components/board/SettingsPanel"
+import UserMenu from "@/components/board/UserMenu"
 
 type User = {
   id: string
@@ -31,11 +32,6 @@ type Props = {
   role: string
   currentUserId?: string
   hasSearch?: boolean
-}
-
-function getInitials(name: string | null | undefined) {
-  const trimmed = (name ?? "").trim()
-  return trimmed ? trimmed[0]!.toUpperCase() : "?"
 }
 
 export default function BoardLayout({
@@ -89,47 +85,15 @@ export default function BoardLayout({
             </button>
           </div>
 
-          <div
-            className="w-8 h-8 rounded-full border border-surface-variant object-cover flex items-center justify-center font-body-md font-semibold"
-            style={{ backgroundColor: profile?.column_color ?? undefined }}
-            aria-label="User avatar"
-          >
-            {getInitials(profile?.display_name)}
-          </div>
+          <UserMenu
+            displayName={profile?.display_name ?? null}
+            columnColor={profile?.column_color ?? null}
+          />
         </div>
       </nav>
 
       <div className="flex flex-1 pt-16 h-full overflow-hidden">
-        <aside className="bg-surface-container-lowest font-body-md fixed left-0 top-16 h-[calc(100vh-64px)] w-[256px] rounded-none border-r border-surface-variant py-[16px] gap-[8px] z-40 hidden md:flex md:flex-col">
-          <div className="px-[16px] mb-[16px] flex items-center gap-md">
-            <div className="w-[40px] h-[40px] rounded-lg bg-surface-container-high flex items-center justify-center text-primary font-h3">
-              RT
-            </div>
-            <div>
-              <h2 className="font-h3 text-on-surface text-[16px] leading-[20px]">
-                Remote Team
-              </h2>
-            </div>
-          </div>
-
-          <nav className="flex-1 px-[8px] flex flex-col gap-[4px]">
-            <a
-              className="flex items-center gap-md px-3 py-[8px] rounded-lg bg-primary/10 text-primary font-semibold border-l-4 border-primary transition-all active:translate-x-1 duration-150"
-              href="#"
-            >
-              <LayoutGrid className="h-[20px] w-[20px]" />
-              <span className="font-body-md">Board</span>
-            </a>
-
-            <LeaderboardPanel currentUserId={currentUserId} />
-
-            <div className="mt-auto">
-              <SettingsPanel isAdmin={role === "admin"} />
-            </div>
-          </nav>
-        </aside>
-
-        <main className="flex-1 md:ml-64 h-full overflow-hidden bg-background flex flex-col">
+        <main className="flex-1 h-full overflow-hidden bg-background flex flex-col">
           <BoardCanvasShell
             users={users}
             cards={cards}
@@ -137,6 +101,11 @@ export default function BoardLayout({
             currentUserId={currentUserId}
             teamId={profile?.team_id ?? ''}
           />
+
+          <div className="fixed bottom-20 right-4 z-50 flex flex-col gap-2 items-end">
+            <LeaderboardPanel currentUserId={currentUserId} asFloatingButton />
+            <SettingsPanel isAdmin={role === "admin"} asFloatingButton />
+          </div>
 
           <SearchBar hasSearch={hasSearch} />
         </main>
