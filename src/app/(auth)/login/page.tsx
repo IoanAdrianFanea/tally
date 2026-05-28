@@ -26,29 +26,39 @@ export default function LoginPage() {
 
     try {
       const supabase = createClient()
+
       const redirectTo = new URL(
         "/auth/callback",
         window.location.origin
       ).toString()
+
+      const { data: exists, error: lookupError } = await supabase
+        .rpc('check_user_email', { p_email: trimmedEmail })
+
+      if (lookupError) {
+        setError(lookupError.message)
+        return
+      }
+
+      if (!exists) {
+        setError("This email needs to be added by an admin before you can log in.")
+        return
+      }
+
       const { error } = await supabase.auth.signInWithOtp({
         email: trimmedEmail,
         options: {
           emailRedirectTo: redirectTo,
-          shouldCreateUser: false,
         },
       })
 
       if (error) {
-        const message = error.message.toLowerCase()
-        if (message.includes("user not found") || message.includes("not found")) {
-          setError(
-            "This email needs to be added by an admin before you can log in."
-          )
-        } else {
-          setError(error.message)
-        }
+        setError(error.message)
         return
       }
+
+      setEmail(trimmedEmail)
+      setMessage("Check your email for a magic link to sign in.")
 
       setEmail(trimmedEmail)
       setMessage("Check your email for a magic link to sign in.")
