@@ -79,7 +79,7 @@ export default function SettingsPanel({ isAdmin }: Props) {
               Are you sure?
             </div>
             <div className="font-body-md text-on-surface-variant text-sm">
-              This will save a snapshot of the current board. Cards will not be deleted. You can archive again later to update the snapshot.
+              This will save a snapshot of the current board. Cards will not be deleted and you can archive again to update the snapshot. Note: archiving overwrites the previous snapshot for this month and cannot be undone.
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button
@@ -123,7 +123,7 @@ export default function SettingsPanel({ isAdmin }: Props) {
               Are you sure?
             </div>
             <div className="font-body-md text-on-surface-variant text-sm">
-              This will save a snapshot of the current board and delete all cards. The board will be empty after this. This cannot be undone.
+              This will save a snapshot of the current board and permanently delete all cards. The board will be empty after this. This cannot be undone — use "Archive month" first if you want to review the snapshot before resetting.
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <Button

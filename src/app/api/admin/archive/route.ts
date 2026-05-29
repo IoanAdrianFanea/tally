@@ -95,7 +95,7 @@ export async function POST(
             user_id: user.id,
             action_type: "board_archived",
             card_id: null,
-            metadata: { month_key: monthKey },
+            metadata: { month_key: monthKey, is_manual: true },
         })
 
     return NextResponse.json({ success: true }, { status: 200 })
