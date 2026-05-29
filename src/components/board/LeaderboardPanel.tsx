@@ -38,7 +38,8 @@ type WeeklyStatsResponse = {
 
 type Props = {
   currentUserId: string
-  asFloatingButton?: boolean
+  variant?: "full" | "icon"
+  panelId?: string
 }
 
 const PODIUM = [
@@ -52,7 +53,12 @@ function getInitials(name: string | null | undefined) {
   return trimmed ? trimmed[0]!.toUpperCase() : "?"
 }
 
-export default function LeaderboardPanel({ currentUserId, asFloatingButton = false }: Props) {
+export default function LeaderboardPanel({
+  currentUserId,
+  variant = "full",
+  panelId,
+}: Props) {
+  const resolvedPanelId = panelId ?? "leaderboard-panel"
   const [isOpen, setIsOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -121,20 +127,29 @@ export default function LeaderboardPanel({ currentUserId, asFloatingButton = fal
 
   return (
     <>
-      <button
-        type="button"
-        className={asFloatingButton
-          ? "text-outline hover:text-on-surface transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container"
-          : "flex items-center gap-md px-3 py-[8px] rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all active:translate-x-1 duration-150"
-        }
-        onClick={() => setIsOpen(true)}
-        aria-expanded={isOpen}
-        aria-controls="leaderboard-panel"
-        aria-label={asFloatingButton ? "Leaderboard" : undefined}
-      >
-        <BarChart3 className="h-[20px] w-[20px]" />
-        {!asFloatingButton && <span className="font-body-md">Leaderboard</span>}
-      </button>
+      {variant === "icon" ? (
+        <button
+          type="button"
+          className="text-outline hover:text-on-surface transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container"
+          onClick={() => setIsOpen(true)}
+          aria-label="Open leaderboard"
+          aria-expanded={isOpen}
+          aria-controls={resolvedPanelId}
+        >
+          <BarChart3 className="h-[20px] w-[20px]" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="flex items-center gap-md px-3 py-[8px] rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all active:translate-x-1 duration-150"
+          onClick={() => setIsOpen(true)}
+          aria-expanded={isOpen}
+          aria-controls={resolvedPanelId}
+        >
+          <BarChart3 className="h-[20px] w-[20px]" />
+          <span className="font-body-md">Leaderboard</span>
+        </button>
+      )}
 
       <div className={`fixed top-16 left-0 right-0 h-[calc(100vh-64px)] z-50 ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
         <button
@@ -145,7 +160,7 @@ export default function LeaderboardPanel({ currentUserId, asFloatingButton = fal
         />
 
         <aside
-          id="leaderboard-panel"
+          id={resolvedPanelId}
           role="dialog"
           aria-modal="true"
           aria-label="Leaderboard"

@@ -1,9 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
-
-import { createClient } from "@/lib/supabase/client"
+import { useEffect, useRef, useState, type FocusEvent } from "react"
 
 type Props = {
   displayName: string | null
@@ -18,8 +15,6 @@ function getInitials(name: string | null | undefined) {
 export default function UserMenu({ displayName, columnColor }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const router = useRouter()
-  const supabase = createClient()
 
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
@@ -33,16 +28,28 @@ export default function UserMenu({ displayName, columnColor }: Props) {
     return () => document.removeEventListener("mousedown", handleMouseDown)
   }, [])
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
+  const handleLogout = () => {
+    window.location.assign("/auth/signout")
+  }
+
+  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
+    if (!menuRef.current?.contains(event.relatedTarget as Node | null)) {
+      setIsOpen(false)
+    }
   }
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div
+      className="relative"
+      ref={menuRef}
+      onMouseEnter={() => setIsOpen(true)}
+      onMouseLeave={() => setIsOpen(false)}
+      onFocus={() => setIsOpen(true)}
+      onBlur={handleBlur}
+    >
       <button
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={() => setIsOpen(true)}
         className="w-8 h-8 rounded-full border border-surface-variant object-cover flex items-center justify-center font-body-md font-semibold"
         style={{ backgroundColor: columnColor ?? undefined }}
         aria-label="User menu"
@@ -53,7 +60,7 @@ export default function UserMenu({ displayName, columnColor }: Props) {
       </button>
 
       {isOpen ? (
-        <div className="absolute right-0 top-full mt-1 bg-surface-container-lowest border border-surface-variant rounded-lg shadow-md p-1 min-w-32 z-50">
+        <div className="absolute right-0 top-full mt-0 bg-surface-container-lowest border border-surface-variant rounded-lg shadow-md p-1 min-w-32 z-50">
           <button
             type="button"
             onClick={handleLogout}

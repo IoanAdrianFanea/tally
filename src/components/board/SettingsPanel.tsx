@@ -9,10 +9,9 @@ import { Button } from "@/components/ui/button"
 
 type Props = {
   isAdmin: boolean
-  asFloatingButton?: boolean
 }
 
-export default function SettingsPanel({ isAdmin, asFloatingButton = false }: Props) {
+export default function SettingsPanel({ isAdmin }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
@@ -154,17 +153,13 @@ export default function SettingsPanel({ isAdmin, asFloatingButton = false }: Pro
     <>
       <button
         type="button"
-        className={asFloatingButton
-          ? "text-outline hover:text-on-surface transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-container"
-          : "flex items-center gap-md px-3 py-[8px] rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all active:translate-x-1 duration-150"
-        }
+        className="flex items-center gap-md px-3 py-[8px] rounded-lg text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-all active:translate-x-1 duration-150"
         onClick={() => setIsOpen(true)}
         aria-expanded={isOpen}
         aria-controls="settings-panel"
-        aria-label={asFloatingButton ? "Settings" : undefined}
       >
         <Settings className="h-[20px] w-[20px]" />
-        {!asFloatingButton && <span className="font-body-md">Settings</span>}
+        <span className="font-body-md">Settings</span>
       </button>
 
       <div className={`fixed top-16 left-0 right-0 h-[calc(100vh-64px)] z-50 ${isOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
