@@ -3,19 +3,7 @@
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
-import {
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  closestCenter,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core"
-import {
-  arrayMove,
-  sortableKeyboardCoordinates,
-} from "@dnd-kit/sortable"
+import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
 
 import Column from "@/components/board/Column"
 
@@ -114,19 +102,6 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
     setOptimisticCards(cardSnapshotRef.current)
   }
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  )
-
-  function getOwnerForId(id: string): string | null {
-    if (users.some((u) => u.id === id)) return id
-    const card = optimisticCards.find((c) => c.id === id)
-    return card ? card.owner_id : null
-  }
-
   useEffect(() => {
   const supabase = createClient()
 
@@ -176,97 +151,51 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
     }
   }, [teamId])
 
-  async function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over) return
+  async function handleDragEnd(result: DropResult) {
+    const { source, destination, draggableId } = result
 
-    const activeId = String(active.id)
-    const overId = String(over.id)
+    if (!destination) return
 
-    if (activeId === overId) return
+    if (
+      source.droppableId === destination.droppableId &&
+      source.index === destination.index
+    ) return
 
-    const activeOwner = getOwnerForId(activeId)
-    const overOwner = getOwnerForId(overId)
-
-    if (!activeOwner || !overOwner) return
+    const sourceOwnerId = source.droppableId
+    const destOwnerId = destination.droppableId
 
     const byOwner = groupAndNormalize(users, optimisticCards)
 
-    const sourceCards = byOwner[activeOwner] ?? []
-    const destCards = byOwner[overOwner] ?? []
+    const sourceCards = [...(byOwner[sourceOwnerId] ?? [])]
+    const destCards = source.droppableId === destination.droppableId
+      ? sourceCards
+      : [...(byOwner[destOwnerId] ?? [])]
 
-    const sourceIndex = sourceCards.findIndex((c) => c.id === activeId)
-    if (sourceIndex < 0) return
+    const [movedCard] = sourceCards.splice(source.index, 1)
+    const updatedCard = { ...movedCard, owner_id: destOwnerId }
+    destCards.splice(destination.index, 0, updatedCard)
 
-    const isOverAColumn = users.some((u) => u.id === overId)
-    const overIndexInDest = destCards.findIndex((c) => c.id === overId)
-    const targetIndex = isOverAColumn
-      ? destCards.length
-      : overIndexInDest >= 0
-          ? overIndexInDest
-          : destCards.length
-
-    if (activeOwner === overOwner) {
-      if (sourceIndex === targetIndex) return
-
-      const moved = arrayMove(sourceCards, sourceIndex, targetIndex).map(
-        (c, index) => ({ ...c, position: index })
-      )
-      byOwner[activeOwner] = moved
-    } else {
-      const nextSource = [...sourceCards]
-      const [movedCard] = nextSource.splice(sourceIndex, 1)
-
-      const nextDest = [...destCards]
-      const overIndexInNextDest = nextDest.findIndex((c) => c.id === overId)
-      const insertIndex = isOverAColumn
-        ? nextDest.length
-        : overIndexInNextDest >= 0
-            ? overIndexInNextDest
-            : nextDest.length
-
-      nextDest.splice(insertIndex, 0, {
-        ...movedCard,
-        owner_id: overOwner,
-      })
-
-      byOwner[activeOwner] = nextSource.map((c, index) => ({
-        ...c,
-        position: index,
-      }))
-      byOwner[overOwner] = nextDest.map((c, index) => ({
-        ...c,
-        position: index,
-      }))
+    const updatedByOwner = {
+      ...byOwner,
+      [sourceOwnerId]: sourceCards,
+      [destOwnerId]: destCards,
     }
 
-    const nextOptimisticCards = Object.values(byOwner).flat()
-    setOptimisticCards(nextOptimisticCards)
+    const nextCards = Object.values(updatedByOwner).flat()
+    setOptimisticCards(nextCards)
 
-    const newPosition = (byOwner[overOwner] ?? []).findIndex(
-      (c) => c.id === activeId
-    )
+    const res = await fetch(`/api/cards/${draggableId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        position: destination.index,
+        owner_id: destOwnerId,
+      }),
+    })
 
-    const payload: Record<string, unknown> = {
-      position: newPosition < 0 ? 0 : newPosition,
-    }
-    if (activeOwner !== overOwner) payload.owner_id = overOwner
-
-    try {
-      const res = await fetch(`/api/cards/${activeId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        // fall back to server state
-        router.refresh()
-        return
-      }
-
+    if (!res.ok) {
       router.refresh()
-    } catch {
+    } else {
       router.refresh()
     }
   }
@@ -279,10 +208,16 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
   )
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={handleDragEnd}
+    <DragDropContext
+      onDragStart={() => {
+        document.body.style.overflow = 'hidden'
+        document.documentElement.style.overflow = 'hidden'
+      }}
+      onDragEnd={(result) => {
+        document.body.style.overflow = ''
+        document.documentElement.style.overflow = ''
+        handleDragEnd(result)
+      }}
     >
       <div className="flex-1 overflow-x-auto kanban-scroll p-lg flex items-start gap-[24px]">
         {users.map((user) => (
@@ -301,6 +236,6 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
 
         <div className="w-[24px] shrink-0" />
       </div>
-    </DndContext>
+    </DragDropContext>
   )
 }

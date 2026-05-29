@@ -1,8 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useDroppable } from "@dnd-kit/core"
-import { SortableContext, rectSortingStrategy } from "@dnd-kit/sortable"
+import { Droppable } from "@hello-pangea/dnd"
 
 import AddCardButton from "@/components/board/AddCardButton"
 import CardItem from "@/components/board/CardItem"
@@ -50,7 +49,6 @@ export default function Column({
   onRevert,
 }: Props) {
   const router = useRouter()
-  const { setNodeRef } = useDroppable({ id: user.id })
 
   const points = typeof user.points === "number" ? user.points : null
   const xpPercent = Math.min(
@@ -91,24 +89,29 @@ export default function Column({
         />
       </div>
 
-      <SortableContext items={cards.map((c) => c.id)} strategy={rectSortingStrategy}>
-        <div
-          ref={setNodeRef}
-          className="flex flex-col gap-sm overflow-y-auto pb-sm custom-scrollbar min-h-[24px]"
-        >
-          {cards.map((card) => (
-            <CardItem
-              key={card.id}
-              card={card}
-              role={role}
-              onOptimisticDelete={onOptimisticDelete}
-              onOptimisticComplete={onOptimisticComplete}
-              onOptimisticReopen={onOptimisticReopen}
-              onRevert={onRevert}
-            />
-          ))}
-        </div>
-      </SortableContext>
+      <Droppable droppableId={user.id}>
+        {(provided, _snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className="flex flex-col gap-sm overflow-y-auto pb-sm custom-scrollbar min-h-[24px]"
+          >
+            {cards.map((card, index) => (
+              <CardItem
+                key={card.id}
+                card={card}
+                index={index}
+                role={role}
+                onOptimisticDelete={onOptimisticDelete}
+                onOptimisticComplete={onOptimisticComplete}
+                onOptimisticReopen={onOptimisticReopen}
+                onRevert={onRevert}
+              />
+            ))}
+            {provided.placeholder}
+          </div>
+        )}
+      </Droppable>
 
       {role === "admin" || user.id === currentUserId ? (
         <AddCardButton
