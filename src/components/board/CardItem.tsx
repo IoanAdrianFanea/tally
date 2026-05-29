@@ -22,6 +22,10 @@ type Card = {
 type Props = {
   card: Card
   role: string
+  onOptimisticDelete: (cardId: string) => void
+  onOptimisticComplete: (cardId: string) => void
+  onOptimisticReopen: (cardId: string) => void
+  onRevert: () => void
 }
 
 function formatWhen(value: string | null | undefined) {
@@ -37,7 +41,14 @@ function formatWhen(value: string | null | undefined) {
   }).format(date)
 }
 
-export default function CardItem({ card, role }: Props) {
+export default function CardItem({
+  card,
+  role,
+  onOptimisticDelete,
+  onOptimisticComplete,
+  onOptimisticReopen,
+  onRevert,
+}: Props) {
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
@@ -60,10 +71,12 @@ export default function CardItem({ card, role }: Props) {
 
   async function deleteCard() {
     setDeleteError(null)
+    onOptimisticDelete(card.id)
     try {
       setDeleting(true)
       const res = await fetch(`/api/cards/${card.id}`, { method: "DELETE" })
       if (!res.ok) {
+        onRevert()
         const payload = (await res.json().catch(() => null)) as { error?: string } | null
         throw new Error(payload?.error || "Failed to delete card")
       }
@@ -77,13 +90,23 @@ export default function CardItem({ card, role }: Props) {
   }
 
   async function completeCard() {
+    onOptimisticComplete(card.id)
     const res = await fetch(`/api/cards/${card.id}/complete`, { method: "POST" })
-    if (res.ok) router.refresh()
+    if (!res.ok) {
+      onRevert()
+    } else {
+      router.refresh()
+    }
   }
 
   async function reopenCard() {
+    onOptimisticReopen(card.id)
     const res = await fetch(`/api/cards/${card.id}/reopen`, { method: "POST" })
-    if (res.ok) router.refresh()
+    if (!res.ok) {
+      onRevert()
+    } else {
+      router.refresh()
+    }
   }
 
   const isGreen = card.status === "green"

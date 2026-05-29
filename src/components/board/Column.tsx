@@ -28,6 +28,10 @@ type Props = {
   cards: Card[]
   role: string
   currentUserId: string
+  onOptimisticDelete: (cardId: string) => void
+  onOptimisticComplete: (cardId: string) => void
+  onOptimisticReopen: (cardId: string) => void
+  onRevert: () => void
 }
 
 function getInitials(name: string | null | undefined) {
@@ -35,7 +39,16 @@ function getInitials(name: string | null | undefined) {
   return trimmed ? trimmed[0]!.toUpperCase() : "?"
 }
 
-export default function Column({ user, cards, role, currentUserId }: Props) {
+export default function Column({
+  user,
+  cards,
+  role,
+  currentUserId,
+  onOptimisticDelete,
+  onOptimisticComplete,
+  onOptimisticReopen,
+  onRevert,
+}: Props) {
   const router = useRouter()
   const { setNodeRef } = useDroppable({ id: user.id })
 
@@ -84,7 +97,15 @@ export default function Column({ user, cards, role, currentUserId }: Props) {
           className="flex flex-col gap-sm overflow-y-auto pb-sm custom-scrollbar min-h-[24px]"
         >
           {cards.map((card) => (
-            <CardItem key={card.id} card={card} role={role} />
+            <CardItem
+              key={card.id}
+              card={card}
+              role={role}
+              onOptimisticDelete={onOptimisticDelete}
+              onOptimisticComplete={onOptimisticComplete}
+              onOptimisticReopen={onOptimisticReopen}
+              onRevert={onRevert}
+            />
           ))}
         </div>
       </SortableContext>

@@ -1,7 +1,7 @@
 "use client"
 
 import { createClient } from "@/lib/supabase/client"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   DndContext,
@@ -35,6 +35,7 @@ type Card = {
   status: string | null
   position?: number | null
   created_at?: string | null
+  completed_at?: string | null
 }
 
 type Props = {
@@ -76,10 +77,42 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
   const router = useRouter()
 
   const [optimisticCards, setOptimisticCards] = useState<Card[]>(cards)
+  const cardSnapshotRef = useRef<Card[]>([])
 
   useEffect(() => {
     setOptimisticCards(cards)
-  }, [cards.length, cards.map(c => c.id + c.status + c.position).join(',')])
+  }, [cards.length, cards.map(c => c.id + c.status + c.position + c.content).join(',')])
+
+  function handleOptimisticDelete(cardId: string) {
+    cardSnapshotRef.current = optimisticCards
+    setOptimisticCards((prev) => prev.filter((c) => c.id !== cardId))
+  }
+
+  function handleOptimisticComplete(cardId: string) {
+    cardSnapshotRef.current = optimisticCards
+    setOptimisticCards((prev) =>
+      prev.map((c) =>
+        c.id === cardId
+          ? { ...c, status: "green", completed_at: new Date().toISOString() }
+          : c
+      )
+    )
+  }
+
+  function handleOptimisticReopen(cardId: string) {
+    cardSnapshotRef.current = optimisticCards
+    setOptimisticCards((prev) =>
+      prev.map((c) =>
+        c.id === cardId
+          ? { ...c, status: "open", completed_at: null }
+          : c
+      )
+    )
+  }
+
+  function handleRevert() {
+    setOptimisticCards(cardSnapshotRef.current)
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -259,6 +292,10 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
             cards={normalized[user.id] ?? []}
             role={role}
             currentUserId={currentUserId}
+            onOptimisticDelete={handleOptimisticDelete}
+            onOptimisticComplete={handleOptimisticComplete}
+            onOptimisticReopen={handleOptimisticReopen}
+            onRevert={handleRevert}
           />
         ))}
 
