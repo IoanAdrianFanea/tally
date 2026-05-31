@@ -2,125 +2,121 @@
 
 import { Suspense, useCallback, useEffect, useRef, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { Search } from "lucide-react"
+import { Search, Calendar, ChevronDown } from "lucide-react"
+import type { CSSProperties } from "react"
 
 type DateFilter = "" | "today" | "week" | "month"
+type SearchBarProps = { hasSearch?: boolean }
 
-type SearchBarProps = {
-	hasSearch?: boolean
-}
+const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
 
 function normalizeDateFilter(value: string | null): DateFilter {
-	if (value === "today" || value === "week" || value === "month") {
-		return value
-	}
-	return ""
+  if (value === "today" || value === "week" || value === "month") return value
+  return ""
 }
 
 function SearchBarInner({ hasSearch }: SearchBarProps) {
-	const router = useRouter()
-	const searchParams = useSearchParams()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
-	const initialQuery = searchParams.get("q") ?? ""
-	const initialDate = normalizeDateFilter(searchParams.get("date"))
+  const [query, setQuery] = useState(searchParams.get("q") ?? "")
+  const [date, setDate] = useState<DateFilter>(normalizeDateFilter(searchParams.get("date")))
+  const dateRef = useRef(date)
+  const queryRef = useRef(query)
 
-	const [query, setQuery] = useState(initialQuery)
-	const [date, setDate] = useState<DateFilter>(initialDate)
+  useEffect(() => { dateRef.current = date }, [date])
+  useEffect(() => { queryRef.current = query }, [query])
 
-	const dateRef = useRef(date)
-	const queryRef = useRef(query)
+  const pushUrl = useCallback(
+    (nextQuery: string, nextDate: DateFilter) => {
+      const trimmed = nextQuery.trim()
+      const params = new URLSearchParams()
+      if (trimmed) params.set("q", trimmed)
+      if (nextDate) params.set("date", nextDate)
+      const href = params.toString() ? `/board?${params.toString()}` : "/board"
+      const curQ = searchParams.get("q") ?? ""
+      const curD = normalizeDateFilter(searchParams.get("date"))
+      if (curQ === trimmed && curD === nextDate) return
+      router.push(href)
+    },
+    [router, searchParams]
+  )
 
-	useEffect(() => {
-		dateRef.current = date
-	}, [date])
+  useEffect(() => {
+    const h = setTimeout(() => pushUrl(query, dateRef.current), 300)
+    return () => clearTimeout(h)
+  }, [pushUrl, query])
 
-	useEffect(() => {
-		queryRef.current = query
-	}, [query])
+  useEffect(() => {
+    pushUrl(queryRef.current, date)
+  }, [date, pushUrl])
 
-	const pushUrl = useCallback(
-		(nextQuery: string, nextDate: DateFilter) => {
-			const trimmedQuery = nextQuery.trim()
-			const params = new URLSearchParams()
+  return (
+    <div className="flex items-center gap-1.5 w-full">
+      {/* Search input — compact, fills its container */}
+      <div className="relative flex-1">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-outline-variant pointer-events-none" />
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search..."
+          className="w-full pl-7 pr-2.5 py-1
+            text-xs text-on-surface
+            bg-surface-container-low/50
+            border border-outline-variant/30
+            rounded-full
+            outline-none
+            focus:border-primary focus:ring-1 focus:ring-primary/20
+            placeholder:text-outline-variant/60
+            transition-all"
+          style={soraFont}
+        />
+      </div>
 
-			if (trimmedQuery) {
-				params.set("q", trimmedQuery)
-			}
+      {/* Date filter — compact pill */}
+      <div className="relative shrink-0">
+        <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-outline-variant pointer-events-none" />
+        <select
+          value={date}
+          onChange={(e) => setDate(normalizeDateFilter(e.target.value))}
+          className="appearance-none
+            pl-6 pr-5 py-1
+            text-xs text-on-surface
+            bg-surface-container-low/50
+            border border-outline-variant/30
+            rounded-full
+            outline-none
+            focus:border-primary
+            cursor-pointer
+            transition-colors"
+          style={soraFont}
+        >
+          <option value="">Any Date</option>
+          <option value="today">Today</option>
+          <option value="week">This Week</option>
+          <option value="month">This Month</option>
+        </select>
+        <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 h-2.5 w-2.5 text-outline-variant pointer-events-none" />
+      </div>
 
-			if (nextDate) {
-				params.set("date", nextDate)
-			}
-
-			const href = params.toString() ? `/board?${params.toString()}` : "/board"
-
-			const currentQuery = searchParams.get("q") ?? ""
-			const currentDate = normalizeDateFilter(searchParams.get("date"))
-
-			if (currentQuery === trimmedQuery && currentDate === nextDate) {
-				return
-			}
-
-			router.push(href)
-		},
-		[router, searchParams]
-	)
-
-	useEffect(() => {
-		const handle = setTimeout(() => {
-			pushUrl(query, dateRef.current)
-		}, 300)
-
-		return () => clearTimeout(handle)
-	}, [pushUrl, query])
-
-	useEffect(() => {
-		pushUrl(queryRef.current, date)
-	}, [date, pushUrl])
-
-	return (
-		<div className="bg-surface-container-lowest border-t border-surface-variant p-md flex flex-wrap items-center gap-md">
-			<div className="flex-1 min-w-50 relative">
-				<Search className="absolute left-sm top-1/2 -translate-y-1/2 text-outline h-[20px] w-[20px]" />
-				<input
-					className="w-full pl-9 pr-sm py-[8px] bg-surface-container-low border border-surface-variant rounded-lg font-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-outline-variant"
-					placeholder="Search cards..."
-					type="text"
-					value={query}
-					onChange={(event) => setQuery(event.target.value)}
-				/>
-			</div>
-
-			<div className="flex items-center gap-sm">
-				<select
-					className="bg-surface-container-low border border-surface-variant rounded-lg font-body-md text-on-surface px-sm py-[8px] focus:outline-none focus:border-primary"
-					value={date}
-					onChange={(event) =>
-						setDate(normalizeDateFilter(event.target.value))
-					}
-				>
-					<option value="">Any Date</option>
-					<option value="today">Today</option>
-					<option value="week">This Week</option>
-					<option value="month">This Month</option>
-				</select>
-			</div>
-
-			{hasSearch ? (
-				<a
-					href="/board"
-					className="text-xs font-body-md text-primary hover:text-primary/80"
-				>
-					Clear search
-				</a>
-			) : null}
-		</div>
-	)
+      {hasSearch && (
+        <a
+          href="/board"
+          className="text-[0.6875rem] text-primary hover:text-primary/70 whitespace-nowrap transition-colors shrink-0"
+          style={soraFont}
+        >
+          Clear
+        </a>
+      )}
+    </div>
+  )
 }
 
 export default function SearchBar(props: SearchBarProps) {
-	return (
-		<Suspense fallback={null}>
-			<SearchBarInner {...props} />
-		</Suspense>
-	)
+  return (
+    <Suspense fallback={null}>
+      <SearchBarInner {...props} />
+    </Suspense>
+  )
 }

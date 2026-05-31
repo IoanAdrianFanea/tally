@@ -1,9 +1,8 @@
 "use client"
 
-import { useRouter } from "next/navigation"
 import { Droppable } from "@hello-pangea/dnd"
+import type { CSSProperties } from "react"
 
-import AddCardButton from "@/components/board/AddCardButton"
 import CardItem from "@/components/board/CardItem"
 
 type User = {
@@ -27,74 +26,69 @@ type Props = {
   cards: Card[]
   role: string
   currentUserId: string
+  colStyle?: CSSProperties
   onOptimisticDelete: (cardId: string) => void
   onOptimisticComplete: (cardId: string) => void
   onOptimisticReopen: (cardId: string) => void
   onRevert: () => void
 }
 
-function getInitials(name: string | null | undefined) {
-  const trimmed = (name ?? "").trim()
-  return trimmed ? trimmed[0]!.toUpperCase() : "?"
-}
+const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
 
 export default function Column({
   user,
   cards,
   role,
   currentUserId,
+  colStyle,
   onOptimisticDelete,
   onOptimisticComplete,
   onOptimisticReopen,
   onRevert,
 }: Props) {
-  const router = useRouter()
-
-  const points = typeof user.points === "number" ? user.points : null
-  const xpPercent = Math.min(
-    100,
-    Math.max(10, points != null ? Math.round((points / 800) * 100) : cards.length * 20)
-  )
+  const totalCards = cards.length
 
   return (
-    <div
-      className="w-70 shrink-0 flex flex-col max-h-full"
-      style={{
-        ["--column-accent" as never]: user.column_color ?? "var(--color-primary)",
-      }}
-    >
-      <div className="mb-sm flex items-center justify-between bg-surface-container-lowest p-sm rounded-lg border border-surface-variant shadow-sm relative overflow-hidden">
-        <div className="absolute left-0 top-0 bottom-0 w-[4px] bg-(--column-accent)" />
-        <div className="flex items-center gap-sm pl-sm">
-          <div
-            className="w-[24px] h-[24px] rounded-full object-cover flex items-center justify-center text-on-surface font-label-sm font-semibold"
-            style={{ backgroundColor: user.column_color ?? undefined }}
-            aria-label={`${user.display_name} avatar`}
+    <div className="flex flex-col min-h-0 self-stretch" style={colStyle}>
+      {/* ── Column header ── */}
+      <div className="mb-3 shrink-0">
+        <div className="flex items-center justify-between gap-2 mb-2.5">
+          <h2
+            className="font-bold text-[1.125rem] text-on-background leading-tight truncate"
+            style={soraFont}
           >
-            {getInitials(user.display_name)}
-          </div>
-          <h3 className="font-body-md font-semibold text-on-surface">
             {user.display_name}
-          </h3>
+          </h2>
+          <span
+            className="shrink-0 text-xs font-bold px-2.5 py-0.5 rounded-full"
+            style={{
+              ...soraFont,
+              backgroundColor: (user.column_color ?? "#4648d4") + "18",
+              color: user.column_color ?? "#4648d4",
+            }}
+          >
+            {totalCards} {totalCards === 1 ? "Item" : "Items"}
+          </span>
         </div>
-        <div className="font-label-sm text-primary font-semibold bg-primary/10 px-xs py-0.5 rounded">
-          {points ?? 0} pts
-        </div>
-      </div>
-
-      <div className="h-[4px] bg-surface-container-high rounded-full mb-md overflow-hidden">
         <div
-          className="h-full bg-(--column-accent)"
-          style={{ width: `${xpPercent}%` }}
+          className="h-0.5 w-full rounded-full"
+          style={{ backgroundColor: user.column_color ?? "#4648d4" }}
         />
       </div>
 
+      {/* ── Cards area ── */}
       <Droppable droppableId={user.id}>
-        {(provided, _snapshot) => (
+        {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className="flex flex-col gap-sm overflow-y-auto pb-sm custom-scrollbar min-h-[24px]"
+            className="flex-1 overflow-y-auto flex flex-col gap-3 pb-3"
+            style={{
+              minHeight: "60px",
+              background: snapshot.isDraggingOver ? "rgba(70,72,212,0.03)" : "transparent",
+              borderRadius: "8px",
+              transition: "background 0.15s",
+            }}
           >
             {cards.map((card, index) => (
               <CardItem
@@ -112,13 +106,7 @@ export default function Column({
           </div>
         )}
       </Droppable>
-
-      {role === "admin" || user.id === currentUserId ? (
-        <AddCardButton
-          ownerId={user.id}
-          onSuccess={() => router.refresh()}
-        />
-      ) : null}
+      {/* AddCardButton intentionally removed — cards added via VaultMenu or other flow */}
     </div>
   )
 }

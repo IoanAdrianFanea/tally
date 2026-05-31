@@ -1,10 +1,7 @@
-import { LayoutGrid } from "lucide-react"
-
 import BoardCanvasShell from "@/components/board/BoardCanvasShell"
-import SearchBar from "@/components/board/SearchBar"
-import LeaderboardPanel from "@/components/board/LeaderboardPanel"
-import SettingsPanel from "@/components/board/SettingsPanel"
 import UserMenu from "@/components/board/UserMenu"
+import VaultMenu from "@/components/board/VaultMenu"
+import SearchBar from "@/components/board/SearchBar"
 
 type User = {
   id: string
@@ -34,6 +31,8 @@ type Props = {
   hasSearch?: boolean
 }
 
+const soraFont = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
+
 export default function BoardLayout({
   users,
   cards,
@@ -49,89 +48,67 @@ export default function BoardLayout({
     year: "numeric",
   }).format(new Date())
 
-  const currentUserPoints =
-    users.find((u) => u.id === currentUserId)?.points ?? 0
-  const pointsLabel = new Intl.NumberFormat("en-US").format(currentUserPoints)
-
   return (
-    <div className="bg-background text-on-surface h-screen flex flex-col overflow-hidden">
-      <nav className="bg-surface-container-lowest font-label-sm font-medium fixed top-0 w-full z-50 border-b border-surface-variant shadow-[0_1px_2px_rgba(0,0,0,0.02)] flex justify-between items-center px-[24px] h-16">
-        <div className="flex items-center gap-sm">
-          <span className="text-[20px] font-bold tracking-tight text-primary font-h3">
-            Standup Board
-          </span>
+    <div className="min-h-screen flex flex-col bg-[#f9f9ff]">
+      {/* ── Floating glassmorphism pill header ── */}
+      <header
+        className="fixed top-4 left-4 right-4 z-50
+          flex items-center justify-between
+          px-6 py-2.5
+          bg-white/80 backdrop-blur-xl
+          rounded-full
+          border border-white/60
+          shadow-[0_4px_6px_-1px_rgba(0,0,0,0.05),0_10px_15px_-3px_rgba(0,0,0,0.08)]"
+      >
+        {/* Left — Logo */}
+        <span
+          className="text-primary font-bold text-[1.75rem] leading-none tracking-tight shrink-0"
+          style={soraFont}
+        >
+          Vault
+        </span>
+
+        {/* Centre — Search, intentionally narrow to keep canvas as focus */}
+        <div className="flex-1 flex justify-center items-center px-6">
+          <div className="w-full max-w-[280px]">
+            <SearchBar hasSearch={hasSearch} />
+          </div>
         </div>
 
-        <div className="flex items-center">
-          <span className="text-primary font-bold flex items-center gap-xs">
+        {/* Right — Month pill + Avatar */}
+        <div className="flex items-center gap-3 shrink-0">
+          <div
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-outline-variant/30 bg-surface-container-low/60 text-sm font-medium text-on-surface"
+            style={soraFont}
+          >
             <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
             {monthLabel}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-md">
-          <div className="flex items-center gap-sm bg-surface-container-low px-sm py-[4px] rounded-full border border-surface-variant">
-            <span className="font-label-sm text-on-surface font-semibold">
-              {pointsLabel} pts
-            </span>
           </div>
-          <div className="flex gap-sm">
-            <LeaderboardPanel
-              currentUserId={currentUserId}
-              variant="icon"
-              panelId="leaderboard-panel-top"
-            />
-          </div>
-
           <UserMenu
             displayName={profile?.display_name ?? null}
             columnColor={profile?.column_color ?? null}
           />
         </div>
-      </nav>
+      </header>
 
-      <div className="flex flex-1 pt-16 h-full overflow-hidden">
-        <aside className="bg-surface-container-lowest font-body-md fixed left-0 top-16 h-[calc(100vh-64px)] w-[256px] rounded-none border-r border-surface-variant py-[16px] gap-[8px] z-40 hidden md:flex md:flex-col">
-          <div className="px-[16px] mb-[16px] flex items-center gap-md">
-            <div className="w-[40px] h-[40px] rounded-lg bg-surface-container-high flex items-center justify-center text-primary font-h3">
-              RT
-            </div>
-            <div>
-              <h2 className="font-h3 text-on-surface text-[16px] leading-[20px]">
-                Remote Team
-              </h2>
-            </div>
-          </div>
+      {/* ── Board canvas — the main event ── */}
+      <main className="h-[calc(100vh-80px)] mt-[4.5rem] mx-4 overflow-hidden">
+        <BoardCanvasShell
+          users={users}
+          cards={cards}
+          role={role}
+          currentUserId={currentUserId}
+          teamId={profile?.team_id ?? ""}
+        />
+      </main>
 
-          <nav className="flex-1 px-[8px] flex flex-col gap-[4px]">
-            <a
-              className="flex items-center gap-md px-3 py-[8px] rounded-lg bg-primary/10 text-primary font-semibold border-l-4 border-primary transition-all active:translate-x-1 duration-150"
-              href="#"
-            >
-              <LayoutGrid className="h-[20px] w-[20px]" />
-              <span className="font-body-md">Board</span>
-            </a>
-
-            <LeaderboardPanel currentUserId={currentUserId} />
-
-            <div className="mt-auto">
-              <SettingsPanel isAdmin={role === "admin"} />
-            </div>
-          </nav>
-        </aside>
-
-        <main className="flex-1 md:ml-64 h-full overflow-hidden bg-background flex flex-col">
-          <BoardCanvasShell
-            users={users}
-            cards={cards}
-            role={role}
-            currentUserId={currentUserId}
-            teamId={profile?.team_id ?? ''}
-          />
-
-          <SearchBar hasSearch={hasSearch} />
-        </main>
-      </div>
+      {/* ── Floating Vault menu trigger ── */}
+      <VaultMenu
+        role={role}
+        currentUserId={currentUserId}
+        profile={profile}
+        users={users}
+      />
     </div>
   )
 }

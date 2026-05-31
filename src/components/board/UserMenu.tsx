@@ -1,75 +1,34 @@
 "use client"
 
-import { useEffect, useRef, useState, type FocusEvent } from "react"
+import type { CSSProperties } from "react"
 
 type Props = {
   displayName: string | null
   columnColor: string | null
 }
 
+const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
+
 function getInitials(name: string | null | undefined) {
-  const trimmed = (name ?? "").trim()
-  return trimmed ? trimmed[0]!.toUpperCase() : "?"
+  const t = (name ?? "").trim()
+  return t ? t[0]!.toUpperCase() : "?"
 }
 
+// Logout is handled exclusively via the VaultMenu footer button.
+// This component is now a pure avatar display — no dropdown.
 export default function UserMenu({ displayName, columnColor }: Props) {
-  const [isOpen, setIsOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    const handleMouseDown = (event: MouseEvent) => {
-      if (!menuRef.current) return
-      if (!menuRef.current.contains(event.target as Node)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleMouseDown)
-    return () => document.removeEventListener("mousedown", handleMouseDown)
-  }, [])
-
-  const handleLogout = () => {
-    window.location.assign("/auth/signout")
-  }
-
-  const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
-    if (!menuRef.current?.contains(event.relatedTarget as Node | null)) {
-      setIsOpen(false)
-    }
-  }
-
   return (
     <div
-      className="relative"
-      ref={menuRef}
-      onMouseEnter={() => setIsOpen(true)}
-      onMouseLeave={() => setIsOpen(false)}
-      onFocus={() => setIsOpen(true)}
-      onBlur={handleBlur}
+      className="w-9 h-9 rounded-full flex items-center justify-center
+        text-white text-sm font-bold shrink-0 select-none"
+      style={{
+        ...soraFont,
+        backgroundColor: columnColor ?? "#4648d4",
+      }}
+      aria-label={displayName ?? "User"}
+      title={displayName ?? "User"}
     >
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className="w-8 h-8 rounded-full border border-surface-variant object-cover flex items-center justify-center font-body-md font-semibold"
-        style={{ backgroundColor: columnColor ?? undefined }}
-        aria-label="User menu"
-        aria-expanded={isOpen}
-        aria-haspopup="menu"
-      >
-        {getInitials(displayName)}
-      </button>
-
-      {isOpen ? (
-        <div className="absolute right-0 top-full mt-0 bg-surface-container-lowest border border-surface-variant rounded-lg shadow-md p-1 min-w-32 z-50">
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="w-full text-left px-3 py-2 text-sm rounded-md hover:bg-surface-container"
-          >
-            Log out
-          </button>
-        </div>
-      ) : null}
+      {getInitials(displayName)}
     </div>
   )
 }

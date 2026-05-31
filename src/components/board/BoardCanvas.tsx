@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
+import type { CSSProperties } from "react"
 
 import Column from "@/components/board/Column"
 
@@ -34,17 +35,39 @@ type Props = {
   teamId: string
 }
 
+// ─── Column width logic ───────────────────────────────────────────────────────
+// ≤5 users  → columns have a capped max-width so they don't stretch full-screen
+//             The cap shrinks slightly as count grows toward 5.
+// 6–10 users → flex-1 with a smaller min, filling available space equally.
+// 11+ users  → fixed narrow width with horizontal scroll.
+
+function getColumnStyle(count: number): CSSProperties {
+  if (count === 1) return { flex: "1 1 0", minWidth: "200px", maxWidth: "480px" }
+  if (count === 2) return { flex: "1 1 0", minWidth: "200px", maxWidth: "360px" }
+  if (count === 3) return { flex: "1 1 0", minWidth: "200px", maxWidth: "300px" }
+  if (count === 4) return { flex: "1 1 0", minWidth: "190px", maxWidth: "270px" }
+  if (count === 5) return { flex: "1 1 0", minWidth: "180px", maxWidth: "240px" }
+  if (count <= 10) return { flex: "1 1 0", minWidth: "170px" }
+  return { flexShrink: 0, width: "160px", minWidth: "160px" }
+}
+
+function getContainerGap(count: number): string {
+  if (count <= 5) return "24px"
+  if (count <= 8) return "16px"
+  return "12px"
+}
+
+// ─── Normalize helpers ────────────────────────────────────────────────────────
+
 function groupAndNormalize(users: User[], cards: Card[]) {
   const byOwner: Record<string, Card[]> = Object.fromEntries(
     users.map((u) => [u.id, [] as Card[]])
   )
-
   for (const card of cards) {
     const ownerId = card.owner_id
     if (!byOwner[ownerId]) byOwner[ownerId] = []
     byOwner[ownerId].push(card)
   }
-
   for (const ownerId of Object.keys(byOwner)) {
     byOwner[ownerId] = [...byOwner[ownerId]]
       .sort((a, b) => {
@@ -57,13 +80,13 @@ function groupAndNormalize(users: User[], cards: Card[]) {
       })
       .map((c, index) => ({ ...c, position: index }))
   }
-
   return byOwner
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function BoardCanvas({ users, cards, role, currentUserId, teamId }: Props) {
   const router = useRouter()
-
   const [optimisticCards, setOptimisticCards] = useState<Card[]>(cards)
   const cardSnapshotRef = useRef<Card[]>([])
 
@@ -91,9 +114,7 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
     cardSnapshotRef.current = optimisticCards
     setOptimisticCards((prev) =>
       prev.map((c) =>
-        c.id === cardId
-          ? { ...c, status: "open", completed_at: null }
-          : c
+        c.id === cardId ? { ...c, status: "open", completed_at: null } : c
       )
     )
   }
@@ -103,28 +124,10 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
   }
 
   useEffect(() => {
-  const supabase = createClient()
-
-  const channel = supabase
-    .channel('cards-changes')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'cards'
-        // ← remove the filter entirely
-      },
-      (payload) => {
-        
-        if (payload.eventType === 'INSERT') {
-          const newCard = payload.new as Card
-          setOptimisticCards(prev => {
-            if (prev.some(c => c.id === newCard.id)) return prev
-            return [...prev, newCard]
-          })
-        }
-        
+    const supabase = createClient()
+    const channel = supabase
+      .channel('cards-changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cards' }, (payload) => {
         if (payload.eventType === 'INSERT') {
           const newCard = payload.new as Card
           setOptimisticCards(prev => {
@@ -142,30 +145,19 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
             prev.filter(c => c.id !== (payload.old as Card).id)
           )
         }
-      }
-      )
+      })
       .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
+    return () => { supabase.removeChannel(channel) }
   }, [teamId])
 
   async function handleDragEnd(result: DropResult) {
     const { source, destination, draggableId } = result
-
     if (!destination) return
-
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) return
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return
 
     const sourceOwnerId = source.droppableId
     const destOwnerId = destination.droppableId
-
     const byOwner = groupAndNormalize(users, optimisticCards)
-
     const sourceCards = [...(byOwner[sourceOwnerId] ?? [])]
     const destCards = source.droppableId === destination.droppableId
       ? sourceCards
@@ -175,29 +167,16 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
     const updatedCard = { ...movedCard, owner_id: destOwnerId }
     destCards.splice(destination.index, 0, updatedCard)
 
-    const updatedByOwner = {
-      ...byOwner,
-      [sourceOwnerId]: sourceCards,
-      [destOwnerId]: destCards,
-    }
-
-    const nextCards = Object.values(updatedByOwner).flat()
-    setOptimisticCards(nextCards)
+    const updatedByOwner = { ...byOwner, [sourceOwnerId]: sourceCards, [destOwnerId]: destCards }
+    setOptimisticCards(Object.values(updatedByOwner).flat())
 
     const res = await fetch(`/api/cards/${draggableId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        position: destination.index,
-        owner_id: destOwnerId,
-      }),
+      body: JSON.stringify({ position: destination.index, owner_id: destOwnerId }),
     })
-
-    if (!res.ok) {
-      router.refresh()
-    } else {
-      router.refresh()
-    }
+    router.refresh()
+    if (!res.ok) router.refresh()
   }
 
   const normalized = groupAndNormalize(
@@ -207,35 +186,43 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
     )
   )
 
-  return (
-    <DragDropContext
-      onDragStart={() => {
-        document.body.style.overflow = 'hidden'
-        document.documentElement.style.overflow = 'hidden'
-      }}
-      onDragEnd={(result) => {
-        document.body.style.overflow = ''
-        document.documentElement.style.overflow = ''
-        handleDragEnd(result)
-      }}
-    >
-      <div className="flex-1 overflow-x-auto kanban-scroll p-lg flex items-start gap-[24px]">
-        {users.map((user) => (
-          <Column
-            key={user.id}
-            user={user}
-            cards={normalized[user.id] ?? []}
-            role={role}
-            currentUserId={currentUserId}
-            onOptimisticDelete={handleOptimisticDelete}
-            onOptimisticComplete={handleOptimisticComplete}
-            onOptimisticReopen={handleOptimisticReopen}
-            onRevert={handleRevert}
-          />
-        ))}
+  const colStyle = getColumnStyle(users.length)
+  const gap = getContainerGap(users.length)
 
-        <div className="w-[24px] shrink-0" />
-      </div>
-    </DragDropContext>
+  return (
+    <div className="h-full flex flex-col">
+      <DragDropContext
+        onDragStart={() => {
+          document.body.style.overflow = 'hidden'
+          document.documentElement.style.overflow = 'hidden'
+        }}
+        onDragEnd={(result) => {
+          document.body.style.overflow = ''
+          document.documentElement.style.overflow = ''
+          handleDragEnd(result)
+        }}
+      >
+        <div
+          className="flex-1 overflow-x-auto kanban-scroll flex items-start h-full px-6 pt-6 pb-4"
+          style={{ gap }}
+        >
+          {users.map((user) => (
+            <Column
+              key={user.id}
+              user={user}
+              cards={normalized[user.id] ?? []}
+              role={role}
+              currentUserId={currentUserId}
+              colStyle={colStyle}
+              onOptimisticDelete={handleOptimisticDelete}
+              onOptimisticComplete={handleOptimisticComplete}
+              onOptimisticReopen={handleOptimisticReopen}
+              onRevert={handleRevert}
+            />
+          ))}
+          <div style={{ width: "16px", flexShrink: 0 }} />
+        </div>
+      </DragDropContext>
+    </div>
   )
 }

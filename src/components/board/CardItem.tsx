@@ -28,11 +28,13 @@ type Props = {
   onRevert: () => void
 }
 
+// Sora applied to all card text
+const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
+
 function formatWhen(value: string | null | undefined) {
   if (!value) return null
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return null
-
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
@@ -78,77 +80,58 @@ export default function CardItem({
   async function completeCard() {
     onOptimisticComplete(card.id)
     const res = await fetch(`/api/cards/${card.id}/complete`, { method: "POST" })
-    if (!res.ok) {
-      onRevert()
-    } else {
-      router.refresh()
-    }
+    if (!res.ok) onRevert()
+    else router.refresh()
   }
 
   async function reopenCard() {
     onOptimisticReopen(card.id)
     const res = await fetch(`/api/cards/${card.id}/reopen`, { method: "POST" })
-    if (!res.ok) {
-      onRevert()
-    } else {
-      router.refresh()
-    }
+    if (!res.ok) onRevert()
+    else router.refresh()
   }
 
   const isGreen = card.status === "green"
   const when = formatWhen(card.created_at)
   const completedWhen = formatWhen(card.completed_at)
+
   const now = new Date()
   const created = card.created_at ? new Date(card.created_at) : null
   const daysOld = created
     ? Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24))
     : 0
   const isStale = !isGreen && daysOld >= 1
+
   const staleStyle: CSSProperties = isStale
     ? daysOld >= 7
-      ? {
-          border: "1px dashed #888888",
-          filter: "grayscale(50%)",
-          backgroundImage:
-            "repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(0,0,0,0.05) 3px, rgba(0,0,0,0.05) 6px)",
-        }
+      ? { border: "1px dashed #aaa", filter: "grayscale(40%)" }
       : daysOld >= 3
-        ? {
-            border: "1px dashed #a0a0a0",
-            filter: "grayscale(30%)",
-            backgroundImage:
-              "repeating-linear-gradient(45deg, transparent, transparent 4px, rgba(0,0,0,0.03) 4px, rgba(0,0,0,0.03) 8px)",
-          }
-        : {
-            border: "1px dashed #c4c4c4",
-            filter: "grayscale(15%)",
-          }
+        ? { border: "1px dashed #bbb", filter: "grayscale(20%)" }
+        : { border: "1px dashed #ccc" }
     : {}
 
   const confirmDeleteModal = confirmDeleteOpen
     ? createPortal(
         <div
-          className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/30 p-4"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); setConfirmDeleteOpen(false) }}
         >
           <div
-            className="w-105 min-w-105 rounded-lg border border-surface-variant bg-surface-container-lowest p-4 shadow-lg"
+            className="w-96 bg-white rounded-2xl p-6 shadow-xl"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
           >
-            <div className="font-h3 text-on-surface text-[16px] leading-[20px] mb-2 whitespace-nowrap">
+            <p className="font-bold text-on-surface text-base mb-1" style={soraFont}>
               Delete this card?
-            </div>
-            <div className="font-body-md text-on-surface-variant text-sm">
+            </p>
+            <p className="text-on-surface-variant text-sm mb-5" style={soraFont}>
               This action cannot be undone.
-            </div>
-            {deleteError && (
-              <div className="mt-2 text-sm text-destructive">{deleteError}</div>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
+            </p>
+            {deleteError && <p className="mb-3 text-sm text-red-500">{deleteError}</p>}
+            <div className="flex justify-end gap-2">
               <Button type="button" variant="secondary" onClick={() => setConfirmDeleteOpen(false)} disabled={deleting}>
                 Cancel
               </Button>
@@ -162,132 +145,126 @@ export default function CardItem({
       )
     : null
 
+  // ── Completed card ──────────────────────────────────────────────────────────
   if (isGreen) {
     return (
       <Draggable draggableId={card.id} index={index}>
-        {(provided, snapshot) => {
-          const draggingStyle: CSSProperties = snapshot.isDragging
-            ? { opacity: 0.5 }
-            : {}
-
-          return (
-            <>
-              <div
-                ref={provided.innerRef}
-                style={{ ...provided.draggableProps.style, ...draggingStyle }}
-                {...provided.draggableProps}
-                {...provided.dragHandleProps}
-                className="group bg-[#f0fdf4] rounded-lg border border-[#bbf7d0] shadow-[0_2px_4px_rgba(0,0,0,0.04)] p-md relative overflow-hidden"
-              >
-                <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#22c55e]" />
-
-                {/* Green card action buttons — top right */}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs items-center">
-                  {role === 'admin' && (
-                    <button
-                      type="button"
-                      className="text-outline hover:text-amber-500 transition-colors"
-                      aria-label="Reopen card"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); reopenCard() }}
-                    >
-                      <RotateCcw className="h-[16px] w-[16px]" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
-                    aria-label="Delete"
-                    disabled={deleting}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); setDeleteError(null); setConfirmDeleteOpen(true) }}
-                  >
-                    <Trash2 className="h-[16px] w-[16px]" />
-                  </button>
-                </div>
-
-                <div className="flex items-start gap-sm">
-                  <CheckCircle2 className="text-[#22c55e] h-4.5 w-4.5 mt-0.5 shrink-0" />
-                  <p className="font-body-md text-on-surface line-through opacity-70">
-                    {card.content}
-                  </p>
-                </div>
-                <div className="mt-sm">
-                  <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
-                    Completed {completedWhen ?? ""}
-                  </span>
-                </div>
-              </div>
-              {confirmDeleteModal}
-            </>
-          )
-        }}
-      </Draggable>
-    )
-  }
-
-  return (
-    <Draggable draggableId={card.id} index={index}>
-      {(provided, snapshot) => {
-        const draggingStyle: CSSProperties = snapshot.isDragging
-          ? { opacity: 0.5 }
-          : {}
-
-        return (
+        {(provided, snapshot) => (
           <>
             <div
               ref={provided.innerRef}
               style={{
                 ...provided.draggableProps.style,
-                ...draggingStyle,
-                ...staleStyle,
+                opacity: snapshot.isDragging ? 0.6 : 1,
               }}
               {...provided.draggableProps}
               {...provided.dragHandleProps}
-              className="group bg-surface-container-lowest rounded-lg border border-surface-variant shadow-[0_2px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_8px_16px_rgba(0,0,0,0.08)] hover:-translate-y-0.5 transition-all duration-200 p-md relative overflow-hidden cursor-pointer"
+              className="group bg-green-50 rounded-xl p-4 border-t-2 border-green-400 shadow-sm relative"
             >
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-(--column-accent) opacity-50" />
-              <p className="font-body-md text-on-surface mb-sm">{card.content}</p>
-              <div className="flex justify-between items-end mt-sm">
-                <div className="flex items-end gap-2">
-                  <span className="font-label-sm text-xs text-outline-variant opacity-0 group-hover:opacity-100 transition-opacity">
-                    {when ?? ""}
-                  </span>
-                </div>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-xs items-center">
-                  <EditCardButton
-                    cardId={card.id}
-                    initialContent={card.content}
-                    onSuccess={() => router.refresh()}
-                  />
-                  {role === 'admin' && (
-                    <button
-                      type="button"
-                      className="text-outline hover:text-green-500 transition-colors"
-                      aria-label="Mark complete"
-                      onPointerDown={(e) => e.stopPropagation()}
-                      onClick={(e) => { e.stopPropagation(); completeCard() }}
-                    >
-                      <CheckCircle2 className="h-[16px] w-[16px]" />
-                    </button>
-                  )}
+              <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+                {role === "admin" && (
                   <button
                     type="button"
-                    className="text-outline hover:text-destructive transition-colors disabled:opacity-50 disabled:hover:text-outline"
-                    aria-label="Delete"
-                    disabled={deleting}
+                    className="p-1 rounded text-outline hover:text-amber-500 transition-colors"
+                    aria-label="Reopen"
                     onPointerDown={(e) => e.stopPropagation()}
-                    onClick={(e) => { e.stopPropagation(); setDeleteError(null); setConfirmDeleteOpen(true) }}
+                    onClick={(e) => { e.stopPropagation(); reopenCard() }}
                   >
-                    <Trash2 className="h-[16px] w-[16px]" />
+                    <RotateCcw className="h-3.5 w-3.5" />
                   </button>
-                </div>
+                )}
+                <button
+                  type="button"
+                  className="p-1 rounded text-outline hover:text-red-500 transition-colors"
+                  aria-label="Delete"
+                  disabled={deleting}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); setDeleteError(null); setConfirmDeleteOpen(true) }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </div>
+
+              <div className="flex items-start gap-2 mb-3">
+                <CheckCircle2 className="text-green-500 h-4 w-4 mt-0.5 shrink-0" />
+                <p className="text-sm text-on-surface line-through opacity-60" style={soraFont}>
+                  {card.content}
+                </p>
+              </div>
+              <p className="text-xs text-outline-variant" style={soraFont}>
+                Completed {completedWhen ?? ""}
+              </p>
             </div>
             {confirmDeleteModal}
           </>
-        )
-      }}
+        )}
+      </Draggable>
+    )
+  }
+
+  // ── Open card ───────────────────────────────────────────────────────────────
+  return (
+    <Draggable draggableId={card.id} index={index}>
+      {(provided, snapshot) => (
+        <>
+          <div
+            ref={provided.innerRef}
+            style={{
+              borderTop: "2px solid #6366f1",
+              ...staleStyle,
+              ...provided.draggableProps.style,
+              opacity: snapshot.isDragging ? 0.6 : 1,
+            }}
+            {...provided.draggableProps}
+            {...provided.dragHandleProps}
+            className="group bg-white rounded-xl p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 relative cursor-pointer"
+          >
+            <p className="text-sm font-medium text-on-surface mb-5 pr-16" style={soraFont}>
+              {card.content}
+              {isStale && daysOld >= 3 && (
+                <span className="ml-2 text-xs text-amber-500 font-normal" style={soraFont}>
+                  Overdue
+                </span>
+              )}
+            </p>
+
+            <div className="flex items-end justify-between">
+              <p className="text-xs text-outline-variant" style={soraFont}>
+                {when ?? ""}
+              </p>
+              <div className="opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 items-center">
+                <EditCardButton
+                  cardId={card.id}
+                  initialContent={card.content}
+                  onSuccess={() => router.refresh()}
+                />
+                {role === "admin" && (
+                  <button
+                    type="button"
+                    className="p-1 rounded text-outline hover:text-green-500 transition-colors"
+                    aria-label="Mark complete"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => { e.stopPropagation(); completeCard() }}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="p-1 rounded text-outline hover:text-red-500 transition-colors"
+                  aria-label="Delete"
+                  disabled={deleting}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => { e.stopPropagation(); setDeleteError(null); setConfirmDeleteOpen(true) }}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+          </div>
+          {confirmDeleteModal}
+        </>
+      )}
     </Draggable>
   )
 }
