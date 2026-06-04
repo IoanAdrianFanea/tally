@@ -1,113 +1,97 @@
-# Productivity Dashboard — Project Plan
+# Standup Board — Product Plan
 
-## Overview
-A browser-based gamified task board for small remote teams. Replaces manual Miro workflows with automated point tracking, timestamps, and monthly archiving.
+## What it is
+A daily infinite canvas workspace for small remote teams. Each day has its own board. Teams organise tasks freely in topic sections, compete on a monthly leaderboard, and navigate between days like a calendar.
 
-**Client:** UK web design agency (remote)
-**Deadline:** June 1st 2026 (35 days)  
-**Stack:** Next.js · TypeScript · Supabase · Tailwind · shadcn/ui · dnd-kit · Vercel
-
----
-
-## Core Jobs the Product Does
-1. Show what everyone is working on today (visual board, one column per person)
-2. Track who is winning the month (auto points from green cards)
-3. Show when people are working (timestamps, start/end of day detection)
-4. Find historical tasks (keyword search across archived months)
+## Stack
+Next.js · TypeScript · Supabase · Tailwind · shadcn/ui · @hello-pangea/dnd · react-zoom-pan-pinch · Vercel
 
 ---
 
-## Scope
+## Data model
 
-### In (v1)
-- Magic link auth, single team workspace
-- Kanban board with one column per user, colour coded
-- Create / edit / delete / drag cards within and across columns
-- Mark card green (admin only) = 1 point
-- Auto timestamps on card creation and completion (visible on hover)
-- First and last action of day logged automatically
-- Stale card visual treatment for incomplete previous-day cards
-- Monthly leaderboard with auto point tally
-- Keyword search + filter by person and date
-- Weekly stats per user (tasks per day, completion rate, avg time)
-- Monthly theme picker (12 prebuilt colour schemes)
-- Archive month → snapshot to DB → board resets clean
-- Mobile responsive web app
+```
+boards
+  id, team_id, date, is_archived, created_at
 
-### Out (v1)
-- Infinite canvas / zoom (solved by monthly reset reducing board size)
-- Multi-team / multi-board support
-- Native mobile app
-- Email notifications or third-party integrations
-- Task weighting or comments
-- Year-to-date search (current + last archived month only)
+sections
+  id, board_id, team_id, name, x, y, width, height, is_done_section, position
 
----
+cards
+  id, board_id, section_id, team_id, owner_id,
+  content, x, y, position, status, completed_at, created_at
 
-## Data Model
+activity_log
+  id, team_id, user_id, action_type, card_id, metadata, created_at
 
-| Table | Purpose |
-|---|---|
-| `teams` | Single team workspace, holds current theme |
-| `users` | Team members with role, colour, display name |
-| `cards` | Tasks with status, position, owner, month_key |
-| `activity_log` | Every action (create, complete, move, login) |
-| `archives` | Monthly snapshots as JSONB |
-| `themes` | 12 preset monthly colour schemes |
+archives
+  id, team_id, month_key, snapshot, is_manual, created_at
+
+users
+  id, team_id, display_name, column_color, role, email
+
+teams
+  id, name, banner_url, banner_title, theme_id
+
+themes
+  12 presets, unchanged
+```
 
 Key decisions:
-- `month_key` (e.g. `2026-05`) on cards makes archiving a single SQL operation
-- `activity_log` is the source of truth for all analytics and timestamps
-- Schema supports multi-tenancy from day one via `team_id` on every table
+- `status` and `completed_at` are set automatically when a card enters or leaves the Done section — backwards compatible with existing leaderboard and archive logic
+- `section_id` on cards replaces `month_key` as the primary organisational unit
+- `boards.date` is the source of truth for day navigation
+- `sections.is_done_section` flags the Done section — only one per board
 
 ---
 
-## API Routes
-Cards
-GET    /api/cards                   all cards for current month
-POST   /api/cards                   create card
-PATCH  /api/cards/:id               update content, position, owner
-DELETE /api/cards/:id               delete card
-POST   /api/cards/:id/complete      mark green (admin only)
-Search
-GET    /api/search?q=&from=&to=&user=
-Stats
-GET    /api/stats/leaderboard       monthly points per user
-GET    /api/stats/user/:id          individual weekly/monthly stats
-GET    /api/stats/team              team-wide metrics
-Admin
-POST   /api/archive                 snapshot month, reset board
-GET    /api/themes                  list available themes
-PATCH  /api/team/theme              set active theme
+## Build order
+
+### 1. Foundation
+- Schema migration — create boards, sections tables, update cards
+- Auto-create today's board on first load
+- Day navigation in navbar — left/right arrows + date picker
+- Past boards load as read-only
+
+### 2. Infinite canvas
+- Pan + zoom via react-zoom-pan-pinch
+- Dot grid background
+- Sections — draggable, resizable, named bordered containers
+- Admin creates, names, repositions, resizes sections
+- Cards are free-floating sticky notes inside sections, coloured by owner
+- Drag and drop works correctly at any zoom level
+- Done section — smart auto-assignment into per-person sub-columns when card is dropped
+- Dropping card into Done section sets status = green, completed_at = now, awards 1 point
+- Removing card from Done section reverts status = open, completed_at = null
+- Minimap
+
+### 3. Cards and points
+- Create card by clicking inside a section
+- Edit and delete cards
+- Drag cards freely between sections
+- Leaderboard counts cards in Done section per person
+- Points update in real time
+
+### 4. Board management
+- Copy single card
+- Multi-select cards and copy
+- Paste to current board
+- Duplicate yesterday's board as starting point for today
+- Archive month — snapshots all boards in that month
+- Browse past boards from calendar picker
+
+### 5. Polish
+- UI redesign — clean, aesthetic, Stitch-inspired
+- Banner upload per board
+- 12 preset monthly themes
+- Performance pass
+- Universal search across all boards with date range filter
+- Mobile responsive (last)
 
 ---
 
-## 35-Day Sprint
-
-| Week | Dates | Tasks | Checkpoint |
-|---|---|---|---|
-| 1 | Apr 27 – May 3 | Project setup, DB schema, auth, static board | Board renders from DB |
-| 2 | May 4 – May 10 | Create/edit/delete, drag and drop, mark green, real-time sync | Live sync across two windows |
-| 3 | May 11 – May 17 | Points + leaderboard, timestamps, start/end of day, search | All smart features working |
-| 4 | May 18 – May 24 | Theme picker, archive + reset, weekly stats, mobile responsive | Feature-complete prototype |
-| 5 | May 25 – May 31 | Bug bash, performance pass, onboarding flow, soft launch | Team is live |
-
----
-
-## Engineering Rules
-- One branch per feature, merged via PR even when working solo
-- Write the DB query before building the UI
-- Ship a demo URL every Friday
-- All scope changes go in `BACKLOG.md`, not the sprint
-- Unit test the points calculation — everything else can break, not that
-
----
-
-## Key Risks
-
-| Risk | Mitigation |
-|---|---|
-| Mobile drag-and-drop is janky | Test on mobile from week 2 |
-| Scope creep from client | IN/OUT list is the contract |
-| Real-time sync conflicts | Last-write-wins for v1 |
-| One bad week kills the timeline | Week 5 is a buffer, scope locks at week 4 |
+## Out of scope for now
+- Multi-team support (lowest priority, add after everything else)
+- Theme customisation beyond 12 presets
+- Decoration and sticker system
+- Email notifications
