@@ -228,7 +228,8 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
           >
             Vault Menu
           </h2>
-          <p className="text-[0.8125rem] text-on-surface-variant mt-0.5 mb-5">
+          <p className="text-[0.8125rem] text-on-surface-variant mt-0.5 mb-5"
+          style={soraFont}>
             Manage your assets
           </p>
 

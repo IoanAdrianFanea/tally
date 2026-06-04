@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, type CSSProperties } from "react"
 import { createPortal } from "react-dom"
 import { Plus } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,8 @@ type Props = {
   ownerId: string
   onSuccess: () => void
 }
+
+const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
 
 export default function AddCardButton({ ownerId, onSuccess }: Props) {
   const [open, setOpen] = useState(false)
@@ -54,6 +56,7 @@ export default function AddCardButton({ ownerId, onSuccess }: Props) {
           hover:text-on-surface hover:bg-white/50
           border border-dashed border-white/40 hover:border-outline-variant/40
           transition-all duration-150"
+        style={soraFont}
         onClick={() => { setError(null); setOpen(true) }}
       >
         <Plus className="h-3.5 w-3.5" />
@@ -72,6 +75,7 @@ export default function AddCardButton({ ownerId, onSuccess }: Props) {
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-modal="true"
+            style={soraFont}
           >
             <div className="font-bold text-on-surface text-base mb-4">Add a card</div>
             <div className="space-y-2 mb-5">

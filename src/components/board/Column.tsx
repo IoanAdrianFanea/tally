@@ -1,8 +1,10 @@
 "use client"
 
 import { Droppable } from "@hello-pangea/dnd"
+import { useRouter } from "next/navigation"
 import type { CSSProperties } from "react"
 
+import AddCardButton from "@/components/board/AddCardButton"
 import CardItem from "@/components/board/CardItem"
 
 type User = {
@@ -46,7 +48,9 @@ export default function Column({
   onOptimisticReopen,
   onRevert,
 }: Props) {
+  const router = useRouter()
   const totalCards = cards.length
+  const canAdd = role === "admin" || user.id === currentUserId
 
   return (
     <div className="flex flex-col min-h-0 self-stretch" style={colStyle}>
@@ -106,7 +110,11 @@ export default function Column({
           </div>
         )}
       </Droppable>
-      {/* AddCardButton intentionally removed — cards added via VaultMenu or other flow */}
+      {canAdd ? (
+        <div className="mt-2 shrink-0">
+          <AddCardButton ownerId={user.id} onSuccess={() => router.refresh()} />
+        </div>
+      ) : null}
     </div>
   )
 }
