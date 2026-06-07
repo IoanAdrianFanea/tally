@@ -4,56 +4,66 @@ import { logActivity } from "@/lib/activity"
 
 export async function POST(
   _request: NextRequest,
-  context: { params: Promise<{ id: string }> }
+  context: { params: { id: string } }
 ) {
-  const { id } = await context.params
-    const supabase = await createClient()
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-    .from('users')
-    .select('team_id, role')
-    .eq('id', user.id)
-    .single()
-  
-    if (!profile) {
-        return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
-    }
-    
-    if (profile.role !== 'admin') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
-
-    const { data, error } = await supabase
-        .from('cards')
-        .update({ 
-            status: 'open',
-            completed_at: null
-        })
-        .eq('id', id)
-        .select()
-        .single()
-        
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    await logActivity(supabase, {
-        team_id: profile.team_id,
-        user_id: user.id,
-        action_type: 'card_reopened',
-        card_id: id,
-        metadata: {
-            content: data.content,
-            owner_id: data.owner_id
-        }
+  if (!user) {
+    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
     })
+  }
 
-    return NextResponse.json({ message: 'Card updated successfully' }, { status: 200 })
+  const { data: profile } = await supabase
+    .from("users")
+    .select("team_id, role")
+    .eq("id", user.id)
+    .single()
 
+  if (!profile) {
+    return new NextResponse(JSON.stringify({ error: "Profile not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  if (profile.role !== "admin") {
+    return new NextResponse(JSON.stringify({ error: "Forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  const { id } = context.params
+
+  const { error } = await supabase
+    .from("cards")
+    .update({ status: "open", completed_at: null })
+    .eq("id", id)
+    .eq("team_id", profile.team_id)
+    .select()
+    .single()
+
+  if (error) {
+    return new NextResponse(JSON.stringify({ error: "Card not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  await logActivity(supabase, {
+    team_id: profile.team_id,
+    user_id: user.id,
+    action_type: "card_reopened",
+    card_id: id,
+  })
+
+  return new NextResponse(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  })
 }

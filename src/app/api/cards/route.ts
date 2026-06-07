@@ -4,128 +4,146 @@ import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { NextResponse, type NextRequest } from "next/server"
 import { logActivity } from "@/lib/activity"
 
-export async function GET(request: NextRequest) { 
-    const supabase = await createClient()
+export async function GET(request: NextRequest) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-    const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
 
-    if (!user) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: profile } = await supabase
-    .from('users')
-    .select('team_id')
-    .eq('id', user.id)
+  const { data: profile } = await supabase
+    .from("users")
+    .select("team_id")
+    .eq("id", user.id)
     .single()
-  
-    if (!profile) {
-        return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
-    }
 
-    const monthKey = new Date().toISOString().slice(0, 7)
+  if (!profile) {
+    return new NextResponse(JSON.stringify({ error: "Profile not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
 
-    const { data: cards, error } = await supabase
-        .from('cards')              // ← from the cards table
-        .select('*')                // ← get all columns
-        .eq('team_id', profile.team_id)  // ← WHERE team_id = profile.team_id
-        .eq('month_key', monthKey)       // ← AND month_key = '2026-05'
-        .order('position', { ascending: true })  // ← ORDER BY position ASC
-    
-    if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-    
-    return NextResponse.json({ cards }, { status: 200 })
-    
+  const boardId = request.nextUrl.searchParams.get("board_id")
+
+  if (!boardId) {
+    return new NextResponse(JSON.stringify({ cards: [] }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  const q = request.nextUrl.searchParams.get("q")
+
+  let query = supabase
+    .from("cards")
+    .select("*")
+    .eq("board_id", boardId)
+    .eq("team_id", profile.team_id)
+
+  if (q) {
+    query = query.textSearch("search_vector", q + ":*", { type: "plain" })
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: true })
+
+  if (error) {
+    return new NextResponse(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
+  }
+
+  return new NextResponse(JSON.stringify({ cards: data ?? [] }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  })
 }
 
-export async function POST(request: NextRequest) { 
-  const supabase = await createClient()  
-  
-  const { data: { user } } = await supabase.auth.getUser()
+export async function POST(request: NextRequest) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
   if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "Content-Type": "application/json" },
+    })
   }
-  
+
   const { data: profile } = await supabase
-    .from('users')
-    .select('team_id, role')
-    .eq('id', user.id)
+    .from("users")
+    .select("team_id, role")
+    .eq("id", user.id)
     .single()
-  
+
   if (!profile) {
-    return NextResponse.json({ error: 'Profile not found' }, { status: 404 })
+    return new NextResponse(JSON.stringify({ error: "Profile not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    })
   }
-  
-  const body = await request.json()
-  const { content, owner_id } = body
-  const cardOwnerId = typeof owner_id === "string" && owner_id ? owner_id : user.id
-  
+
+  const { content, board_id, owner_id, section_id, x, y } = await request.json()
+
   if (!content) {
-    return NextResponse.json({ error: 'Content is required' }, { status: 400 })
-  }
-  
-  const monthKey = new Date().toISOString().slice(0, 7)
-
-  const isCrossOwnerInsert = cardOwnerId !== user.id
-
-  if (isCrossOwnerInsert && profile.role !== 'admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    return new NextResponse(JSON.stringify({ error: "Content is required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    })
   }
 
-  const insertPayload = {
-    content,
-    owner_id: cardOwnerId,
-    team_id: profile.team_id,
-    month_key: monthKey,
-    status: 'open',
-    position: 0,
+  if (!board_id) {
+    return new NextResponse(JSON.stringify({ error: "board_id is required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    })
   }
 
-  const db = isCrossOwnerInsert
-    ? createServiceClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-    : supabase
+  const cardOwnerId =
+    profile.role === "admin" && owner_id ? owner_id : user.id
 
-  if (isCrossOwnerInsert) {
-    const { data: targetUser, error: targetError } = await db
-      .from('users')
-      .select('team_id')
-      .eq('id', cardOwnerId)
-      .single()
-
-    if (targetError || !targetUser) {
-      return NextResponse.json({ error: 'Invalid owner_id' }, { status: 400 })
-    }
-
-    if (targetUser.team_id !== profile.team_id) {
-      return NextResponse.json({ error: 'Invalid owner_id' }, { status: 400 })
-    }
-  }
-
-  const { data: card, error } = await db
-    .from('cards')
-    .insert(insertPayload)
+  const { data, error } = await supabase
+    .from("cards")
+    .insert({
+      board_id,
+      team_id: profile.team_id,
+      owner_id: cardOwnerId,
+      content: content.trim(),
+      section_id: section_id ?? null,
+      x: x ?? 0,
+      y: y ?? 0,
+      position: 0,
+      status: "open",
+    })
     .select()
     .single()
-  
+
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return new NextResponse(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    })
   }
-  
+
   await logActivity(supabase, {
     team_id: profile.team_id,
     user_id: user.id,
-    action_type: 'card_created',
-    card_id: card.id,
-    metadata: {
-      content: card.content,
-      owner_id: card.owner_id
-    }
+    action_type: "card_created",
+    card_id: data.id,
+    metadata: { content: data.content, owner_id: data.owner_id },
   })
 
-  return NextResponse.json({ card }, { status: 201 })
+  return new NextResponse(JSON.stringify(data), {
+    status: 201,
+    headers: { "Content-Type": "application/json" },
+  })
 }
