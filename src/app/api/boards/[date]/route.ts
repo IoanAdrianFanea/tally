@@ -3,9 +3,9 @@ import { NextResponse, type NextRequest } from "next/server"
 
 export async function GET(
   _request: NextRequest,
-  context: { params: { date: string } }
+  context: { params: Promise<{ date: string }> }
 ) {
-  const { date } = context.params
+  const { date } = await context.params
   const supabase = await createClient()
   const {
     data: { user },

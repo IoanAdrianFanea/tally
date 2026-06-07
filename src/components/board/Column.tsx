@@ -28,6 +28,7 @@ type Props = {
   cards: Card[]
   role: string
   currentUserId: string
+  boardId: string
   colStyle?: CSSProperties
   onOptimisticDelete: (cardId: string) => void
   onOptimisticComplete: (cardId: string) => void
@@ -42,6 +43,7 @@ export default function Column({
   cards,
   role,
   currentUserId,
+  boardId,
   colStyle,
   onOptimisticDelete,
   onOptimisticComplete,
@@ -112,7 +114,7 @@ export default function Column({
       </Droppable>
       {canAdd ? (
         <div className="mt-2 shrink-0">
-          <AddCardButton ownerId={user.id} onSuccess={() => router.refresh()} />
+          <AddCardButton ownerId={user.id} boardId={boardId} onSuccess={() => router.refresh()} />
         </div>
       ) : null}
     </div>

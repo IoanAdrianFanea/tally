@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button"
 
 type Props = {
   ownerId: string
+  boardId: string
   onSuccess: () => void
 }
 
 const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
 
-export default function AddCardButton({ ownerId, onSuccess }: Props) {
+export default function AddCardButton({ ownerId, boardId, onSuccess }: Props) {
   const [open, setOpen] = useState(false)
   const [content, setContent] = useState("")
   const [error, setError] = useState<string | null>(null)
@@ -29,7 +30,7 @@ export default function AddCardButton({ ownerId, onSuccess }: Props) {
       const res = await fetch("/api/cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: trimmed, owner_id: ownerId }),
+        body: JSON.stringify({ content: trimmed, owner_id: ownerId, board_id: boardId }),
       })
       if (!res.ok) {
         const p = (await res.json().catch(() => null)) as { error?: string } | null

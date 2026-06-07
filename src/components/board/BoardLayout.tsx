@@ -2,6 +2,20 @@ import BoardCanvasShell from "@/components/board/BoardCanvasShell"
 import UserMenu from "@/components/board/UserMenu"
 import VaultMenu from "@/components/board/VaultMenu"
 import SearchBar from "@/components/board/SearchBar"
+import DayNavigator from "@/components/board/DayNavigator"
+
+type Section = {
+  id: string
+  board_id: string
+  team_id: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  is_done_section: boolean
+  position: number
+}
 
 type User = {
   id: string
@@ -28,6 +42,9 @@ type Props = {
   profile: Profile | null
   role: string
   currentUserId?: string
+  sections: Section[]
+  boardId: string | null
+  currentDate: string
   hasSearch?: boolean
 }
 
@@ -39,14 +56,12 @@ export default function BoardLayout({
   profile,
   role,
   currentUserId: currentUserIdProp,
+  sections,
+  boardId,
+  currentDate,
   hasSearch,
 }: Props) {
   const currentUserId = currentUserIdProp ?? profile?.id ?? ""
-
-  const monthLabel = new Intl.DateTimeFormat("en-US", {
-    month: "long",
-    year: "numeric",
-  }).format(new Date())
 
   return (
     <div className="min-h-screen flex flex-col bg-[#f9f9ff]">
@@ -68,22 +83,18 @@ export default function BoardLayout({
           Vault
         </span>
 
-        {/* Centre — Search, intentionally narrow to keep canvas as focus */}
-        <div className="flex-1 flex justify-center items-center px-6">
-          <div className="w-full max-w-[280px]">
+        {/* Centre — Search + Day navigator */}
+        <div className="flex-1 flex justify-center items-center gap-3 px-6">
+          <div className="w-full max-w-[660px]">
             <SearchBar hasSearch={hasSearch} />
+          </div>
+          <div style={soraFont}>
+            <DayNavigator currentDate={currentDate} />
           </div>
         </div>
 
-        {/* Right — Month pill + Avatar */}
+        {/* Right — Avatar */}
         <div className="flex items-center gap-3 shrink-0">
-          <div
-            className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-outline-variant/30 bg-surface-container-low/60 text-sm font-medium text-on-surface"
-            style={soraFont}
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
-            {monthLabel}
-          </div>
           <UserMenu
             displayName={profile?.display_name ?? null}
             columnColor={profile?.column_color ?? null}
@@ -93,13 +104,21 @@ export default function BoardLayout({
 
       {/* ── Board canvas — the main event ── */}
       <main className="h-[calc(100vh-80px)] mt-[4.5rem] mx-4 overflow-hidden">
-        <BoardCanvasShell
-          users={users}
-          cards={cards}
-          role={role}
-          currentUserId={currentUserId}
-          teamId={profile?.team_id ?? ""}
-        />
+        {boardId ? (
+          <BoardCanvasShell
+            users={users}
+            cards={cards}
+            role={role}
+            currentUserId={currentUserId}
+            sections={sections}
+            boardId={boardId}
+          />
+        ) : (
+          <div className="h-full flex items-center justify-center text-outline text-sm"
+          style={soraFont}>
+            No board for this date
+          </div>
+        )}
       </main>
 
       {/* ── Floating Vault menu trigger ── */}

@@ -6,6 +6,19 @@ const BoardCanvas = dynamic(() => import("@/components/board/BoardCanvas"), {
   ssr: false,
 })
 
+type Section = {
+  id: string
+  board_id: string
+  team_id: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  is_done_section: boolean
+  position: number
+}
+
 type User = {
   id: string
   display_name: string
@@ -28,7 +41,8 @@ type Props = {
   cards: Card[]
   role: string
   currentUserId: string
-  teamId: string
+  sections: Section[]
+  boardId: string
 }
 
 export default function BoardCanvasShell(props: Props) {

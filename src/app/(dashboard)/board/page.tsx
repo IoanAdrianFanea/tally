@@ -1,14 +1,16 @@
 import { redirect } from "next/navigation"
-
 import { createClient } from "@/lib/supabase/server"
 import BoardLayout from "@/components/board/BoardLayout"
 
 type BoardPageProps = {
-  searchParams: Promise<{ q?: string; date?: string }>
+  searchParams: Promise<{ date?: string; q?: string }>
 }
 
 export default async function BoardPage({ searchParams }: BoardPageProps) {
-  const { q, date } = await searchParams
+  const { date, q } = await searchParams
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const isValidDate = date && /^\d{4}-\d{2}-\d{2}$/.test(date)
+  const targetDate = isValidDate ? date : todayStr
   const supabase = await createClient()
 
   const {
@@ -25,21 +27,40 @@ export default async function BoardPage({ searchParams }: BoardPageProps) {
     .eq("id", user.id)
     .single()
 
+  if (!profile) {
+    // This should not happen if the user is logged in, but as a safeguard:
+    redirect("/login")
+  }
+
   const { data: users } = await supabase
     .from("users")
     .select("*")
-    .eq("team_id", profile?.team_id)
+    .eq("team_id", profile.team_id)
 
-  const monthKey = new Date().toISOString().slice(0, 7)
+  let boardId: string | null = null
 
-  let cardsQuery = supabase
-    .from("cards")
+  if (targetDate === new Date().toISOString().slice(0, 10)) {
+    const { data } = await supabase.rpc("get_or_create_today_board", { p_team_id: profile.team_id })
+    boardId = data
+  } else {
+    const { data } = await supabase
+      .from("boards")
+      .select("id")
+      .eq("team_id", profile.team_id)
+      .eq("date", targetDate)
+      .single()
+    boardId = data?.id ?? null
+  }
+
+  const { data: sections } = boardId ? await supabase
+    .from("sections")
     .select("*")
-    .eq("team_id", profile?.team_id)
-    .eq("month_key", monthKey)
+    .eq("board_id", boardId)
+    .order("position", { ascending: true }) : { data: null }
 
-  if (q) {
-    const prefixQuery = q
+  // Build prefix query for text search
+  const buildPrefixQuery = (raw: string) => {
+    return raw
       .trim()
       .split(/\s+/)
       .filter(Boolean)
@@ -47,67 +68,43 @@ export default async function BoardPage({ searchParams }: BoardPageProps) {
       .filter(Boolean)
       .map((term) => `${term}:*`)
       .join(" & ")
-
-    if (prefixQuery) {
-      cardsQuery = cardsQuery.filter("search_vector", "fts", prefixQuery)
-    }
   }
 
-  if (date === "today") {
-    const now = new Date()
-    const startOfToday = new Date(now)
-    startOfToday.setHours(0, 0, 0, 0)
-
-    const endOfToday = new Date(now)
-    endOfToday.setHours(23, 59, 59, 999)
-
-    cardsQuery = cardsQuery
-      .gte("created_at", startOfToday.toISOString())
-      .lte("created_at", endOfToday.toISOString())
-  } else if (date === "week") {
-    const now = new Date()
-    const startOfMonday = new Date(now)
-    const day = startOfMonday.getDay()
-    const diffToMonday = (day + 6) % 7
-    startOfMonday.setDate(startOfMonday.getDate() - diffToMonday)
-    startOfMonday.setHours(0, 0, 0, 0)
-
-    cardsQuery = cardsQuery.gte("created_at", startOfMonday.toISOString())
-  } else if (date === "month") {
-    const now = new Date()
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-    startOfMonth.setHours(0, 0, 0, 0)
-
-    cardsQuery = cardsQuery.gte("created_at", startOfMonth.toISOString())
+  let cardsQuery = boardId
+    ? supabase
+        .from("cards")
+        .select("*")
+        .eq("board_id", boardId)
+        .order("created_at", { ascending: true })
+    : null
+  if (cardsQuery && q) {
+    const pf = buildPrefixQuery(q)
+    if (pf) cardsQuery = cardsQuery.filter("search_vector", "fts", pf)
   }
-
-  const { data: cards } = await cardsQuery.order("position", {
-    ascending: true,
-  })
-    
+  const { data: cards } = cardsQuery ? await cardsQuery : { data: null }
   const pointsByOwner: Record<string, number> = {}
   for (const card of cards ?? []) {
-    if (card.status === "green") {
+    if (card.status === "green" && card.owner_id) {
       pointsByOwner[card.owner_id] = (pointsByOwner[card.owner_id] || 0) + 1
     }
   }
 
-  const usersWithPoints = (users ?? []).map((user) => ({
-    ...user,
-    points: pointsByOwner[user.id] || 0,
+  const usersWithPoints = (users ?? []).map((u) => ({
+    ...u,
+    points: pointsByOwner[u.id] || 0,
   }))
-      
-
-  const hasSearch = Boolean(q || date)
 
   return (
     <BoardLayout
       users={usersWithPoints}
       cards={cards ?? []}
       profile={profile}
-      role={profile?.role ?? "member"}
-      currentUserId={profile?.id ?? ""}
-      hasSearch={hasSearch}
+      role={profile.role ?? "member"}
+      currentUserId={profile.id ?? ""}
+      sections={sections ?? []}
+      boardId={boardId}
+      currentDate={targetDate}
+      hasSearch={Boolean(q)}
     />
   )
 }

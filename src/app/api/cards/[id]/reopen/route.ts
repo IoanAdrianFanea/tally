@@ -4,7 +4,7 @@ import { logActivity } from "@/lib/activity"
 
 export async function POST(
   _request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
   const {
@@ -38,19 +38,17 @@ export async function POST(
     })
   }
 
-  const { id } = context.params
+  const { id } = await context.params
 
   const { error } = await supabase
     .from("cards")
     .update({ status: "open", completed_at: null })
     .eq("id", id)
     .eq("team_id", profile.team_id)
-    .select()
-    .single()
 
   if (error) {
-    return new NextResponse(JSON.stringify({ error: "Card not found" }), {
-      status: 404,
+    return new NextResponse(JSON.stringify({ error: error.message }), {
+      status: 500,
       headers: { "Content-Type": "application/json" },
     })
   }

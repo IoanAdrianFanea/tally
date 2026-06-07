@@ -6,7 +6,7 @@ import { NextResponse, type NextRequest } from "next/server"
 
 export async function PATCH(
   request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
   const {
@@ -33,7 +33,7 @@ export async function PATCH(
     })
   }
 
-  const { id } = context.params
+  const { id } = await context.params
   const {
     content,
     x,
@@ -87,7 +87,7 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  context: { params: { id: string } }
+  context: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createClient()
   const {
@@ -114,7 +114,7 @@ export async function DELETE(
     })
   }
 
-  const { id } = context.params
+  const { id } = await context.params
 
   const { error } = await supabase
     .from("cards")

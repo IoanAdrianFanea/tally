@@ -27,12 +27,26 @@ type Card = {
   completed_at?: string | null
 }
 
+type Section = {
+  id: string
+  board_id: string
+  team_id: string
+  name: string
+  x: number
+  y: number
+  width: number
+  height: number
+  is_done_section: boolean
+  position: number
+}
+
 type Props = {
   users: User[]
   cards: Card[]
   role: string
   currentUserId: string
-  teamId: string
+  sections: Section[]
+  boardId: string
 }
 
 // ─── Column width logic ───────────────────────────────────────────────────────
@@ -85,7 +99,7 @@ function groupAndNormalize(users: User[], cards: Card[]) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function BoardCanvas({ users, cards, role, currentUserId, teamId }: Props) {
+export default function BoardCanvas({ users, cards, role, currentUserId, sections, boardId }: Props) {
   const router = useRouter()
   const [optimisticCards, setOptimisticCards] = useState<Card[]>(cards)
   const cardSnapshotRef = useRef<Card[]>([])
@@ -148,7 +162,7 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [teamId])
+  }, [boardId])
 
   async function handleDragEnd(result: DropResult) {
     const { source, destination, draggableId } = result
@@ -213,6 +227,7 @@ export default function BoardCanvas({ users, cards, role, currentUserId, teamId 
               cards={normalized[user.id] ?? []}
               role={role}
               currentUserId={currentUserId}
+              boardId={boardId}
               colStyle={colStyle}
               onOptimisticDelete={handleOptimisticDelete}
               onOptimisticComplete={handleOptimisticComplete}

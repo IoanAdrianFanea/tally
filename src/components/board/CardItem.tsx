@@ -80,15 +80,21 @@ export default function CardItem({
   async function completeCard() {
     onOptimisticComplete(card.id)
     const res = await fetch(`/api/cards/${card.id}/complete`, { method: "POST" })
-    if (!res.ok) onRevert()
-    else router.refresh()
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      console.error("complete failed", res.status, body)
+      onRevert()
+    } else router.refresh()
   }
 
   async function reopenCard() {
     onOptimisticReopen(card.id)
     const res = await fetch(`/api/cards/${card.id}/reopen`, { method: "POST" })
-    if (!res.ok) onRevert()
-    else router.refresh()
+    if (!res.ok) {
+      const body = await res.json().catch(() => null)
+      console.error("reopen failed", res.status, body)
+      onRevert()
+    } else router.refresh()
   }
 
   const isGreen = card.status === "green"
