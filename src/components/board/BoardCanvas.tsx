@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
 import type { CSSProperties } from "react"
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch"
 
 import Column from "@/components/board/Column"
 
@@ -99,9 +100,13 @@ function groupAndNormalize(users: User[], cards: Card[]) {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const CANVAS_WIDTH = 6000
+const CANVAS_HEIGHT = 4000
+
 export default function BoardCanvas({ users, cards, role, currentUserId, sections, boardId }: Props) {
   const router = useRouter()
   const [optimisticCards, setOptimisticCards] = useState<Card[]>(cards)
+  const [isDraggingCard, setIsDraggingCard] = useState(false)
   const cardSnapshotRef = useRef<Card[]>([])
 
   useEffect(() => {
@@ -204,40 +209,69 @@ export default function BoardCanvas({ users, cards, role, currentUserId, section
   const gap = getContainerGap(users.length)
 
   return (
-    <div className="h-full flex flex-col">
-      <DragDropContext
-        onDragStart={() => {
-          document.body.style.overflow = 'hidden'
-          document.documentElement.style.overflow = 'hidden'
-        }}
-        onDragEnd={(result) => {
-          document.body.style.overflow = ''
-          document.documentElement.style.overflow = ''
-          handleDragEnd(result)
-        }}
+    <div className="h-full w-full overflow-hidden rounded-xl">
+      <TransformWrapper
+        initialScale={1}
+        minScale={0.25}
+        maxScale={2.5}
+        limitToBounds={false}
+        panning={{ disabled: isDraggingCard, velocityDisabled: true }}
+        smooth={true}
+        wheel={{ step: 0.0015 }}
+        doubleClick={{ disabled: true }}
       >
-        <div
-          className="flex-1 overflow-x-auto kanban-scroll flex items-start h-full px-6 pt-6 pb-4"
-          style={{ gap }}
+        <TransformComponent
+          wrapperStyle={{ width: "100%", height: "100%" }}
+          contentStyle={{ width: `${CANVAS_WIDTH}px`, height: `${CANVAS_HEIGHT}px` }}
         >
-          {users.map((user) => (
-            <Column
-              key={user.id}
-              user={user}
-              cards={normalized[user.id] ?? []}
-              role={role}
-              currentUserId={currentUserId}
-              boardId={boardId}
-              colStyle={colStyle}
-              onOptimisticDelete={handleOptimisticDelete}
-              onOptimisticComplete={handleOptimisticComplete}
-              onOptimisticReopen={handleOptimisticReopen}
-              onRevert={handleRevert}
-            />
-          ))}
-          <div style={{ width: "16px", flexShrink: 0 }} />
-        </div>
-      </DragDropContext>
+          {/* ── Dot grid background ── */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundImage:
+                "radial-gradient(circle, rgba(100, 100, 160, 0.22) 1.5px, transparent 1.5px)",
+              backgroundSize: "28px 28px",
+            }}
+          />
+
+          {/* ── Columns ── */}
+          <DragDropContext
+            onDragStart={() => {
+              setIsDraggingCard(true)
+              document.body.style.overflow = "hidden"
+              document.documentElement.style.overflow = "hidden"
+            }}
+            onDragEnd={(result) => {
+              setIsDraggingCard(false)
+              document.body.style.overflow = ""
+              document.documentElement.style.overflow = ""
+              handleDragEnd(result)
+            }}
+          >
+            <div
+              className="absolute flex items-start pt-6 px-6 pb-4"
+              style={{ top: 0, left: 0, gap }}
+            >
+              {users.map((user) => (
+                <Column
+                  key={user.id}
+                  user={user}
+                  cards={normalized[user.id] ?? []}
+                  role={role}
+                  currentUserId={currentUserId}
+                  boardId={boardId}
+                  colStyle={colStyle}
+                  onOptimisticDelete={handleOptimisticDelete}
+                  onOptimisticComplete={handleOptimisticComplete}
+                  onOptimisticReopen={handleOptimisticReopen}
+                  onRevert={handleRevert}
+                />
+              ))}
+            </div>
+          </DragDropContext>
+        </TransformComponent>
+      </TransformWrapper>
     </div>
   )
 }
