@@ -22,6 +22,7 @@ type Props = {
   onChange: (updates: Partial<SectionData>) => void
   onDragStart: () => void
   onCommit: (pos: { x: number; y: number }) => void
+  onCommitResize: (rect: { x: number; y: number; width: number; height: number }) => void
 }
 
 const MIN_SIZE = 80
@@ -46,6 +47,7 @@ export default function CanvasSection({
   onChange,
   onDragStart,
   onCommit,
+  onCommitResize,
 }: Props) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [nameValue, setNameValue] = useState(section.name)
@@ -98,6 +100,7 @@ export default function CanvasSection({
     const startY = e.clientY
     const orig = { x: section.x, y: section.y, width: section.width, height: section.height }
 
+    let finalRect = { ...orig }
     function onMove(me: MouseEvent) {
       const dx = (me.clientX - startX) / scale
       const dy = (me.clientY - startY) / scale
@@ -115,11 +118,13 @@ export default function CanvasSection({
         y = orig.y + orig.height - newH
         height = newH
       }
-      onChange({ x, y, width, height })
+      finalRect = { x, y, width, height }
+      onChange(finalRect)
     }
     function onUp() {
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mouseup", onUp)
+      onCommitResize(finalRect)
     }
     window.addEventListener("mousemove", onMove)
     window.addEventListener("mouseup", onUp)

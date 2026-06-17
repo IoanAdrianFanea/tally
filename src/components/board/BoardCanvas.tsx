@@ -7,8 +7,10 @@ import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
 import type { CSSProperties } from "react"
 import { TransformWrapper, TransformComponent, useTransformContext, useTransformComponent } from "react-zoom-pan-pinch"
 
+import { StickyNote as StickyNoteIcon } from "lucide-react"
 import Column from "@/components/board/Column"
 import CanvasSection, { type SectionData } from "@/components/board/CanvasSection"
+import StickyNote, { type CanvasCard } from "@/components/board/StickyNote"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -29,6 +31,9 @@ type Card = {
   position?: number | null
   created_at?: string | null
   completed_at?: string | null
+  x?: number | null
+  y?: number | null
+  section_id?: string | null
 }
 
 type Section = {
@@ -129,6 +134,7 @@ type CanvasContentProps = {
   onUpdateSection: (id: string, updates: Partial<SectionData>) => void
   onSectionDragStart: () => void
   onCommitSection: (id: string, pos: { x: number; y: number }) => void
+  onCommitSectionResize: (id: string, rect: { x: number; y: number; width: number; height: number }) => void
   users: User[]
   normalizedCards: Record<string, Card[]>
   currentUserId: string
@@ -141,6 +147,12 @@ type CanvasContentProps = {
   onOptimisticComplete: (id: string) => void
   onOptimisticReopen: (id: string) => void
   onRevert: () => void
+  canvasNotes: CanvasCard[]
+  autoEditNoteId: string | null
+  onAutoEditDone: () => void
+  onUpdateNotePosition: (id: string, x: number, y: number) => void
+  onUpdateNoteContent: (id: string, content: string) => void
+  onDeleteNote: (id: string) => void
 }
 
 function CanvasContent({
@@ -154,6 +166,7 @@ function CanvasContent({
   onUpdateSection,
   onSectionDragStart,
   onCommitSection,
+  onCommitSectionResize,
   users,
   normalizedCards,
   currentUserId,
@@ -166,6 +179,12 @@ function CanvasContent({
   onOptimisticComplete,
   onOptimisticReopen,
   onRevert,
+  canvasNotes,
+  autoEditNoteId,
+  onAutoEditDone,
+  onUpdateNotePosition,
+  onUpdateNoteContent,
+  onDeleteNote,
 }: CanvasContentProps) {
   const ctx = useTransformContext()
   // Reactive scale for rendering (re-renders CanvasContent when zoom changes)
@@ -270,8 +289,30 @@ function CanvasContent({
           onChange={(updates) => onUpdateSection(s.id, updates)}
           onDragStart={onSectionDragStart}
           onCommit={(pos) => onCommitSection(s.id, pos)}
+          onCommitResize={(rect) => onCommitSectionResize(s.id, rect)}
         />
       ))}
+
+      {/* ── Sticky notes ── */}
+      {canvasNotes.map((note) => {
+        const owner = users.find((u) => u.id === note.owner_id)
+        const color = owner?.column_color ?? "#6366f1"
+        const canEdit = note.owner_id === currentUserId || role === "admin"
+        return (
+          <StickyNote
+            key={note.id}
+            note={note}
+            scale={scale}
+            color={color}
+            canEdit={canEdit}
+            autoEdit={note.id === autoEditNoteId}
+            onPositionCommit={(x, y) => onUpdateNotePosition(note.id, x, y)}
+            onContentSave={(content) => onUpdateNoteContent(note.id, content)}
+            onDelete={() => onDeleteNote(note.id)}
+            onAutoEditDone={onAutoEditDone}
+          />
+        )
+      })}
 
       {/* ── Columns ── */}
       <DragDropContext
@@ -362,13 +403,26 @@ export default function BoardCanvas({
   const router = useRouter()
 
   // ── Card state ──
-  const [optimisticCards, setOptimisticCards] = useState<Card[]>(cards)
+  const [optimisticCards, setOptimisticCards] = useState<Card[]>(
+    cards.filter((c) => (c.x ?? 0) === 0 && (c.y ?? 0) === 0)
+  )
+  const [canvasNotes, setCanvasNotes] = useState<CanvasCard[]>(
+    cards
+      .filter((c) => (c.x ?? 0) !== 0 || (c.y ?? 0) !== 0)
+      .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status }))
+  )
+  const [autoEditNoteId, setAutoEditNoteId] = useState<string | null>(null)
   const [isDraggingCard, setIsDraggingCard] = useState(false)
   const cardSnapshotRef = useRef<Card[]>([])
 
   useEffect(() => {
-    setOptimisticCards(cards)
-  }, [cards.length, cards.map((c) => c.id + c.status + c.position + c.content).join(",")])
+    setOptimisticCards(cards.filter((c) => (c.x ?? 0) === 0 && (c.y ?? 0) === 0))
+    setCanvasNotes(
+      cards
+        .filter((c) => (c.x ?? 0) !== 0 || (c.y ?? 0) !== 0)
+        .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status }))
+    )
+  }, [cards.length, cards.map((c) => c.id + c.status + c.position + c.content + c.x + c.y).join(",")])
 
   function handleOptimisticDelete(cardId: string) {
     cardSnapshotRef.current = optimisticCards
@@ -406,20 +460,40 @@ export default function BoardCanvas({
       .on("postgres_changes", { event: "*", schema: "public", table: "cards" }, (payload) => {
         if (payload.eventType === "INSERT") {
           const newCard = payload.new as Card
-          setOptimisticCards((prev) => {
-            if (prev.some((c) => c.id === newCard.id)) return prev
-            return [...prev, newCard]
-          })
+          const isCanvasNote = (newCard.x ?? 0) !== 0 || (newCard.y ?? 0) !== 0
+          if (isCanvasNote) {
+            setCanvasNotes((prev) => {
+              if (prev.some((n) => n.id === newCard.id)) return prev
+              return [...prev, { id: newCard.id, content: newCard.content, owner_id: newCard.owner_id, x: newCard.x ?? 0, y: newCard.y ?? 0, status: newCard.status }]
+            })
+          } else {
+            setOptimisticCards((prev) => {
+              if (prev.some((c) => c.id === newCard.id)) return prev
+              return [...prev, newCard]
+            })
+          }
         }
         if (payload.eventType === "UPDATE") {
-          setOptimisticCards((prev) =>
-            prev.map((c) => (c.id === (payload.new as Card).id ? (payload.new as Card) : c))
-          )
+          const updated = payload.new as Card
+          const isCanvasNote = (updated.x ?? 0) !== 0 || (updated.y ?? 0) !== 0
+          if (isCanvasNote) {
+            setCanvasNotes((prev) =>
+              prev.map((n) =>
+                n.id === updated.id
+                  ? { id: updated.id, content: updated.content, owner_id: updated.owner_id, x: updated.x ?? 0, y: updated.y ?? 0, status: updated.status }
+                  : n
+              )
+            )
+          } else {
+            setOptimisticCards((prev) =>
+              prev.map((c) => (c.id === updated.id ? updated : c))
+            )
+          }
         }
         if (payload.eventType === "DELETE") {
-          setOptimisticCards((prev) =>
-            prev.filter((c) => c.id !== (payload.old as Card).id)
-          )
+          const deleted = payload.old as Card
+          setOptimisticCards((prev) => prev.filter((c) => c.id !== deleted.id))
+          setCanvasNotes((prev) => prev.filter((n) => n.id !== deleted.id))
         }
       })
       .subscribe()
@@ -514,6 +588,14 @@ export default function BoardCanvas({
     setCanvasSections((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     )
+    // Name is only set on commitRename — persist immediately
+    if (updates.name !== undefined) {
+      fetch(`/api/sections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: updates.name }),
+      })
+    }
   }
 
   const sectionsBeforeDragRef = useRef<SectionData[]>([])
@@ -529,13 +611,88 @@ export default function BoardCanvas({
     const others = sectionsBeforeDragRef.current.filter((s) => s.id !== id)
     if (others.some((other) => rectsOverlap(moved, other))) {
       setCanvasSections(sectionsBeforeDragRef.current)
+      return
     }
+    fetch(`/api/sections/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ x: pos.x, y: pos.y }),
+    })
+  }
+
+  function handleCommitSectionResize(id: string, rect: { x: number; y: number; width: number; height: number }) {
+    fetch(`/api/sections/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(rect),
+    })
   }
 
   function toggleEditMode() {
     setEditMode((v) => !v)
     setPendingRect(null)
     setContextMenu(null)
+  }
+
+  // ── Canvas note handlers ──
+
+  async function handleAddNote() {
+    const tempId = crypto.randomUUID()
+    const newNote: CanvasCard = {
+      id: tempId,
+      content: "",
+      owner_id: currentUserId,
+      x: 300,
+      y: 300,
+      status: "open",
+    }
+    setCanvasNotes((prev) => [...prev, newNote])
+    setAutoEditNoteId(tempId)
+
+    const res = await fetch("/api/cards", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: " ", board_id: boardId, x: 300, y: 300 }),
+    })
+
+    if (res.ok) {
+      const saved = await res.json()
+      setCanvasNotes((prev) =>
+        prev.map((n) =>
+          n.id === tempId
+            ? { id: saved.id, content: saved.content?.trim() ?? "", owner_id: saved.owner_id, x: saved.x ?? 300, y: saved.y ?? 300, status: saved.status }
+            : n
+        )
+      )
+      setAutoEditNoteId(saved.id)
+    } else {
+      setCanvasNotes((prev) => prev.filter((n) => n.id !== tempId))
+      setAutoEditNoteId(null)
+    }
+  }
+
+  async function handleUpdateNotePosition(id: string, x: number, y: number) {
+    setCanvasNotes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y } : n)))
+    await fetch(`/api/cards/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ x, y }),
+    })
+  }
+
+  async function handleUpdateNoteContent(id: string, content: string) {
+    const stored = content.trim() || " "
+    setCanvasNotes((prev) => prev.map((n) => (n.id === id ? { ...n, content: content.trim() } : n)))
+    await fetch(`/api/cards/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: stored }),
+    })
+  }
+
+  async function handleDeleteNote(id: string) {
+    setCanvasNotes((prev) => prev.filter((n) => n.id !== id))
+    await fetch(`/api/cards/${id}`, { method: "DELETE" })
   }
 
   // ── Derived ──
@@ -594,6 +751,7 @@ export default function BoardCanvas({
             onUpdateSection={handleUpdateSection}
             onSectionDragStart={handleSectionDragStart}
             onCommitSection={handleCommitSection}
+            onCommitSectionResize={handleCommitSectionResize}
             users={users}
             normalizedCards={normalized}
             currentUserId={currentUserId}
@@ -606,41 +764,87 @@ export default function BoardCanvas({
             onOptimisticComplete={handleOptimisticComplete}
             onOptimisticReopen={handleOptimisticReopen}
             onRevert={handleRevert}
+            canvasNotes={canvasNotes}
+            autoEditNoteId={autoEditNoteId}
+            onAutoEditDone={() => setAutoEditNoteId(null)}
+            onUpdateNotePosition={handleUpdateNotePosition}
+            onUpdateNoteContent={handleUpdateNoteContent}
+            onDeleteNote={handleDeleteNote}
           />
         </TransformComponent>
       </TransformWrapper>
 
-      {/* ── Edit mode toggle button (admin only) ── */}
-      {role === "admin" && (
+      {/* ── Right-side floating buttons ── */}
+      <div
+        style={{
+          position: "absolute",
+          right: 16,
+          top: "50%",
+          transform: "translateY(-50%)",
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          alignItems: "center",
+          zIndex: 40,
+        }}
+      >
+        {/* Add note button — visible to all users */}
         <button
-          onClick={toggleEditMode}
-          title={editMode ? "Exit edit mode" : "Enter edit mode"}
+          onClick={handleAddNote}
+          title="Add sticky note"
           style={{
-            position: "absolute",
-            right: 16,
-            top: "50%",
-            transform: "translateY(-50%)",
             width: 40,
             height: 40,
             borderRadius: "50%",
-            backgroundColor: editMode ? "#6366f1" : "white",
-            color: editMode ? "white" : "#6366f1",
+            backgroundColor: "white",
+            color: "#6366f1",
             border: "2px solid #6366f1",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: editMode ? 22 : 24,
-            fontWeight: 600,
             boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-            zIndex: 40,
             transition: "background-color 0.15s, color 0.15s",
-            lineHeight: 1,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#6366f1"
+            e.currentTarget.style.color = "white"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "white"
+            e.currentTarget.style.color = "#6366f1"
           }}
         >
-          {editMode ? "×" : "+"}
+          <StickyNoteIcon size={18} />
         </button>
-      )}
+
+        {/* Edit mode toggle — admin only */}
+        {role === "admin" && (
+          <button
+            onClick={toggleEditMode}
+            title={editMode ? "Exit edit mode" : "Enter edit mode"}
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              backgroundColor: editMode ? "#6366f1" : "white",
+              color: editMode ? "white" : "#6366f1",
+              border: "2px solid #6366f1",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: editMode ? 22 : 24,
+              fontWeight: 600,
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              transition: "background-color 0.15s, color 0.15s",
+              lineHeight: 1,
+            }}
+          >
+            {editMode ? "×" : "+"}
+          </button>
+        )}
+      </div>
 
       {/* ── Context menu ── */}
       {contextMenu && (
