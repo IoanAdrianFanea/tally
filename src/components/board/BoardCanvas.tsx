@@ -2,13 +2,9 @@
 
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
-import { DragDropContext, type DropResult } from "@hello-pangea/dnd"
-import type { CSSProperties } from "react"
 import { TransformWrapper, TransformComponent, useTransformContext, useTransformComponent } from "react-zoom-pan-pinch"
 
 import { StickyNote as StickyNoteIcon } from "lucide-react"
-import Column from "@/components/board/Column"
 import CanvasSection, { type SectionData, DONE_PAD, DONE_SECTION_HEADER, DONE_COL_HEADER, DONE_COL_GAP, DONE_NOTE_GAP, DONE_NOTE_W, DONE_NOTE_H } from "@/components/board/CanvasSection"
 import StickyNote, { type CanvasCard } from "@/components/board/StickyNote"
 
@@ -28,9 +24,6 @@ type Card = {
   content: string
   owner_id: string
   status: string | null
-  position?: number | null
-  created_at?: string | null
-  completed_at?: string | null
   x?: number | null
   y?: number | null
   section_id?: string | null
@@ -60,50 +53,6 @@ type Props = {
 
 type RectData = { x: number; y: number; width: number; height: number }
 
-// ─── Column width / gap helpers ───────────────────────────────────────────────
-
-function getColumnStyle(count: number): CSSProperties {
-  if (count === 1) return { flex: "1 1 0", minWidth: "200px", maxWidth: "480px" }
-  if (count === 2) return { flex: "1 1 0", minWidth: "200px", maxWidth: "360px" }
-  if (count === 3) return { flex: "1 1 0", minWidth: "200px", maxWidth: "300px" }
-  if (count === 4) return { flex: "1 1 0", minWidth: "190px", maxWidth: "270px" }
-  if (count === 5) return { flex: "1 1 0", minWidth: "180px", maxWidth: "240px" }
-  if (count <= 10) return { flex: "1 1 0", minWidth: "170px" }
-  return { flexShrink: 0, width: "160px", minWidth: "160px" }
-}
-
-function getContainerGap(count: number): string {
-  if (count <= 5) return "24px"
-  if (count <= 8) return "16px"
-  return "12px"
-}
-
-// ─── Normalize helpers ────────────────────────────────────────────────────────
-
-function groupAndNormalize(users: User[], cards: Card[]) {
-  const byOwner: Record<string, Card[]> = Object.fromEntries(
-    users.map((u) => [u.id, [] as Card[]])
-  )
-  for (const card of cards) {
-    const ownerId = card.owner_id
-    if (!byOwner[ownerId]) byOwner[ownerId] = []
-    byOwner[ownerId].push(card)
-  }
-  for (const ownerId of Object.keys(byOwner)) {
-    byOwner[ownerId] = [...byOwner[ownerId]]
-      .sort((a, b) => {
-        const ap = typeof a.position === "number" ? a.position : 0
-        const bp = typeof b.position === "number" ? b.position : 0
-        if (ap !== bp) return ap - bp
-        return a.created_at && b.created_at
-          ? a.created_at.localeCompare(b.created_at)
-          : 0
-      })
-      .map((c, index) => ({ ...c, position: index }))
-  }
-  return byOwner
-}
-
 // ─── Overlap helper ──────────────────────────────────────────────────────────
 
 function rectsOverlap(a: SectionData, b: SectionData): boolean {
@@ -127,6 +76,10 @@ type CanvasContentProps = {
   editMode: boolean
   role: string
   sections: SectionData[]
+  selectedSectionId: string | null
+  onSelectSection: (id: string | null) => void
+  selectedNoteId: string | null
+  onSelectNote: (id: string | null) => void
   pendingRect: RectData | null
   onPendingRect: (r: RectData | null) => void
   onShowContextMenu: (x: number, y: number, rect: RectData) => void
@@ -138,17 +91,8 @@ type CanvasContentProps = {
   onToggleSectionDone: (id: string) => void
   doneSectionColumns: Record<string, Array<{ displayName: string; color: string }>>
   users: User[]
-  normalizedCards: Record<string, Card[]>
   currentUserId: string
   boardId: string
-  colStyle: CSSProperties
-  gap: string
-  setIsDraggingCard: (v: boolean) => void
-  handleDragEnd: (result: DropResult) => void
-  onOptimisticDelete: (id: string) => void
-  onOptimisticComplete: (id: string) => void
-  onOptimisticReopen: (id: string) => void
-  onRevert: () => void
   canvasNotes: CanvasCard[]
   autoEditNoteId: string | null
   onAutoEditDone: () => void
@@ -161,6 +105,10 @@ function CanvasContent({
   editMode,
   role,
   sections,
+  selectedSectionId,
+  onSelectSection,
+  selectedNoteId,
+  onSelectNote,
   pendingRect,
   onPendingRect,
   onShowContextMenu,
@@ -172,17 +120,8 @@ function CanvasContent({
   onToggleSectionDone,
   doneSectionColumns,
   users,
-  normalizedCards,
   currentUserId,
   boardId,
-  colStyle,
-  gap,
-  setIsDraggingCard,
-  handleDragEnd,
-  onOptimisticDelete,
-  onOptimisticComplete,
-  onOptimisticReopen,
-  onRevert,
   canvasNotes,
   autoEditNoteId,
   onAutoEditDone,
@@ -202,10 +141,9 @@ function CanvasContent({
   } | null>(null)
 
   const [drawRect, setDrawRect] = useState<RectData | null>(null)
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!editMode) setSelectedSectionId(null)
+    if (!editMode) onSelectSection(null)
   }, [editMode])
 
   function getCanvasCoords(clientX: number, clientY: number) {
@@ -218,7 +156,8 @@ function CanvasContent({
 
   function handleMouseDown(e: React.MouseEvent) {
     if (!editMode || e.button !== 0) return
-    setSelectedSectionId(null)
+    onSelectSection(null)
+    onSelectNote(null)
     onPendingRect(null)
 
     const coords = getCanvasCoords(e.clientX, e.clientY)
@@ -289,7 +228,7 @@ function CanvasContent({
           scale={scale}
           editMode={editMode}
           isSelected={selectedSectionId === s.id}
-          onSelect={() => setSelectedSectionId(s.id)}
+          onSelect={() => onSelectSection(s.id)}
           onChange={(updates) => onUpdateSection(s.id, updates)}
           onDragStart={onSectionDragStart}
           onCommit={(pos) => onCommitSection(s.id, pos)}
@@ -314,7 +253,9 @@ function CanvasContent({
             color={color}
             canEdit={canEdit}
             canMove={canMove}
+            isSelected={note.id === selectedNoteId}
             autoEdit={note.id === autoEditNoteId}
+            onSelect={() => onSelectNote(note.id)}
             onPositionCommit={(x, y) => onUpdateNotePosition(note.id, x, y)}
             onContentSave={(content) => onUpdateNoteContent(note.id, content)}
             onDelete={() => onDeleteNote(note.id)}
@@ -322,43 +263,6 @@ function CanvasContent({
           />
         )
       })}
-
-      {/* ── Columns ── */}
-      <DragDropContext
-        onDragStart={() => {
-          setIsDraggingCard(true)
-          document.body.style.overflow = "hidden"
-          document.documentElement.style.overflow = "hidden"
-        }}
-        onDragEnd={(result) => {
-          setIsDraggingCard(false)
-          document.body.style.overflow = ""
-          document.documentElement.style.overflow = ""
-          handleDragEnd(result)
-        }}
-      >
-        <div
-          className="absolute flex items-start pt-6 px-6 pb-4"
-          style={{ top: 0, left: 0, gap, zIndex: 10 }}
-          onMouseDown={(e) => { if (editMode) e.stopPropagation() }}
-        >
-          {users.map((user) => (
-            <Column
-              key={user.id}
-              user={user}
-              cards={normalizedCards[user.id] ?? []}
-              role={role}
-              currentUserId={currentUserId}
-              boardId={boardId}
-              colStyle={colStyle}
-              onOptimisticDelete={onOptimisticDelete}
-              onOptimisticComplete={onOptimisticComplete}
-              onOptimisticReopen={onOptimisticReopen}
-              onRevert={onRevert}
-            />
-          ))}
-        </div>
-      </DragDropContext>
 
       {/* ── Draw preview (while actively dragging) ── */}
       {drawRect && drawRect.width > 4 && drawRect.height > 4 && (
@@ -409,58 +313,20 @@ export default function BoardCanvas({
   sections: _dbSections,
   boardId,
 }: Props) {
-  const router = useRouter()
 
   // ── Card state ──
-  const [optimisticCards, setOptimisticCards] = useState<Card[]>(
-    cards.filter((c) => (c.x ?? 0) === 0 && (c.y ?? 0) === 0)
-  )
   const [canvasNotes, setCanvasNotes] = useState<CanvasCard[]>(
     cards
-      .filter((c) => (c.x ?? 0) !== 0 || (c.y ?? 0) !== 0)
       .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status, section_id: c.section_id }))
   )
   const [autoEditNoteId, setAutoEditNoteId] = useState<string | null>(null)
-  const [isDraggingCard, setIsDraggingCard] = useState(false)
-  const cardSnapshotRef = useRef<Card[]>([])
 
   useEffect(() => {
-    setOptimisticCards(cards.filter((c) => (c.x ?? 0) === 0 && (c.y ?? 0) === 0))
     setCanvasNotes(
       cards
-        .filter((c) => (c.x ?? 0) !== 0 || (c.y ?? 0) !== 0)
         .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status, section_id: c.section_id }))
     )
-  }, [cards.length, cards.map((c) => c.id + c.status + c.position + c.content + c.x + c.y).join(",")])
-
-  function handleOptimisticDelete(cardId: string) {
-    cardSnapshotRef.current = optimisticCards
-    setOptimisticCards((prev) => prev.filter((c) => c.id !== cardId))
-  }
-
-  function handleOptimisticComplete(cardId: string) {
-    cardSnapshotRef.current = optimisticCards
-    setOptimisticCards((prev) =>
-      prev.map((c) =>
-        c.id === cardId
-          ? { ...c, status: "green", completed_at: new Date().toISOString() }
-          : c
-      )
-    )
-  }
-
-  function handleOptimisticReopen(cardId: string) {
-    cardSnapshotRef.current = optimisticCards
-    setOptimisticCards((prev) =>
-      prev.map((c) =>
-        c.id === cardId ? { ...c, status: "open", completed_at: null } : c
-      )
-    )
-  }
-
-  function handleRevert() {
-    setOptimisticCards(cardSnapshotRef.current)
-  }
+  }, [cards.length, cards.map((c) => c.id + c.status + c.content + c.x + c.y).join(",")])
 
   useEffect(() => {
     const supabase = createClient()
@@ -469,83 +335,28 @@ export default function BoardCanvas({
       .on("postgres_changes", { event: "*", schema: "public", table: "cards" }, (payload) => {
         if (payload.eventType === "INSERT") {
           const newCard = payload.new as Card
-          const isCanvasNote = (newCard.x ?? 0) !== 0 || (newCard.y ?? 0) !== 0
-          if (isCanvasNote) {
-            setCanvasNotes((prev) => {
-              if (prev.some((n) => n.id === newCard.id)) return prev
-              return [...prev, { id: newCard.id, content: newCard.content, owner_id: newCard.owner_id, x: newCard.x ?? 0, y: newCard.y ?? 0, status: newCard.status, section_id: newCard.section_id }]
-            })
-          } else {
-            setOptimisticCards((prev) => {
-              if (prev.some((c) => c.id === newCard.id)) return prev
-              return [...prev, newCard]
-            })
-          }
+          setCanvasNotes((prev) => {
+            if (prev.some((n) => n.id === newCard.id)) return prev
+            return [...prev, { id: newCard.id, content: newCard.content, owner_id: newCard.owner_id, x: newCard.x ?? 0, y: newCard.y ?? 0, status: newCard.status, section_id: newCard.section_id }]
+          })
         }
         if (payload.eventType === "UPDATE") {
           const updated = payload.new as Card
-          const isCanvasNote = (updated.x ?? 0) !== 0 || (updated.y ?? 0) !== 0
-          if (isCanvasNote) {
-            setCanvasNotes((prev) =>
-              prev.map((n) =>
-                n.id === updated.id
-                  ? { id: updated.id, content: updated.content, owner_id: updated.owner_id, x: updated.x ?? 0, y: updated.y ?? 0, status: updated.status, section_id: updated.section_id }
-                  : n
-              )
+          setCanvasNotes((prev) =>
+            prev.map((n) =>
+              n.id === updated.id
+                ? { id: updated.id, content: updated.content, owner_id: updated.owner_id, x: updated.x ?? 0, y: updated.y ?? 0, status: updated.status, section_id: updated.section_id }
+                : n
             )
-          } else {
-            setOptimisticCards((prev) =>
-              prev.map((c) => (c.id === updated.id ? updated : c))
-            )
-          }
+          )
         }
         if (payload.eventType === "DELETE") {
-          const deleted = payload.old as Card
-          setOptimisticCards((prev) => prev.filter((c) => c.id !== deleted.id))
-          setCanvasNotes((prev) => prev.filter((n) => n.id !== deleted.id))
+          setCanvasNotes((prev) => prev.filter((n) => n.id !== (payload.old as Card).id))
         }
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [boardId])
-
-  async function handleDragEnd(result: DropResult) {
-    const { source, destination, draggableId } = result
-    if (!destination) return
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    )
-      return
-
-    const sourceOwnerId = source.droppableId
-    const destOwnerId = destination.droppableId
-    const byOwner = groupAndNormalize(users, optimisticCards)
-    const sourceCards = [...(byOwner[sourceOwnerId] ?? [])]
-    const destCards =
-      source.droppableId === destination.droppableId
-        ? sourceCards
-        : [...(byOwner[destOwnerId] ?? [])]
-
-    const [movedCard] = sourceCards.splice(source.index, 1)
-    const updatedCard = { ...movedCard, owner_id: destOwnerId }
-    destCards.splice(destination.index, 0, updatedCard)
-
-    const updatedByOwner = {
-      ...byOwner,
-      [sourceOwnerId]: sourceCards,
-      [destOwnerId]: destCards,
-    }
-    setOptimisticCards(Object.values(updatedByOwner).flat())
-
-    const res = await fetch(`/api/cards/${draggableId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ position: destination.index, owner_id: destOwnerId }),
-    })
-    router.refresh()
-    if (!res.ok) router.refresh()
-  }
 
   // ── Edit mode + canvas sections state ──
   const [editMode, setEditMode] = useState(false)
@@ -555,6 +366,77 @@ export default function BoardCanvas({
   const [pendingRect, setPendingRect] = useState<RectData | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; rect: RectData } | null>(null)
   const [isDrawing, setIsDrawing] = useState(false)
+
+  // ── Selection + undo ──
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
+  const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null)
+  const [deleteConfirmSectionId, setDeleteConfirmSectionId] = useState<string | null>(null)
+  const sectionUndoStack = useRef<SectionData[][]>([])
+
+  function pushUndo() {
+    sectionUndoStack.current = [...sectionUndoStack.current.slice(-19), canvasSections]
+  }
+
+  // ── Keyboard: Delete + Ctrl+Z ──
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const tag = (e.target as HTMLElement).tagName
+      if (tag === "INPUT" || tag === "TEXTAREA") return
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedSectionId && editMode) {
+          e.preventDefault()
+          setDeleteConfirmSectionId(selectedSectionId)
+          return
+        }
+        if (selectedNoteId) {
+          e.preventDefault()
+          handleDeleteNote(selectedNoteId)
+          setSelectedNoteId(null)
+          return
+        }
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && editMode) {
+        e.preventDefault()
+        const stack = sectionUndoStack.current
+        if (stack.length === 0) return
+        const prev = stack[stack.length - 1]!
+        sectionUndoStack.current = stack.slice(0, -1)
+        // Restore sections and re-sync each to DB
+        setCanvasSections(prev)
+        for (const s of prev) {
+          fetch(`/api/sections/${s.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ x: s.x, y: s.y, width: s.width, height: s.height, name: s.name, is_done_section: s.isDone }),
+          })
+        }
+      }
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [editMode, selectedSectionId, selectedNoteId, canvasSections])
+
+  async function handleDeleteSection(id: string) {
+    setDeleteConfirmSectionId(null)
+    setSelectedSectionId(null)
+    // Free all cards in section (clear section_id)
+    const notesInSection = canvasNotes.filter((n) => n.section_id === id)
+    setCanvasNotes((prev) => prev.map((n) => n.section_id === id ? { ...n, section_id: null } : n))
+    setCanvasSections((prev) => prev.filter((s) => s.id !== id))
+    await fetch(`/api/sections/${id}`, { method: "DELETE" }).catch(() => {})
+    // Clear section_id on all cards that were in this section
+    await Promise.all(
+      notesInSection.map((n) =>
+        fetch(`/api/cards/${n.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ section_id: null }),
+        })
+      )
+    )
+  }
 
 
 
@@ -594,6 +476,8 @@ export default function BoardCanvas({
   }
 
   function handleUpdateSection(id: string, updates: Partial<SectionData>) {
+    // Only push undo for name changes (position/resize have their own commit)
+    if (updates.name !== undefined) pushUndo()
     setCanvasSections((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     )
@@ -622,6 +506,7 @@ export default function BoardCanvas({
       setCanvasSections(sectionsBeforeDragRef.current)
       return
     }
+    pushUndo()
     fetch(`/api/sections/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -738,17 +623,61 @@ export default function BoardCanvas({
   }
 
   function handleCommitSectionResize(id: string, rect: { x: number; y: number; width: number; height: number }) {
+    pushUndo()
     fetch(`/api/sections/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(rect),
     })
+    // Re-layout notes in done section to match new origin
+    const section = canvasSections.find((s) => s.id === id)
+    if (section?.isDone) {
+      // Build snapshot with updated section geometry
+      const updatedSections = canvasSections.map((s) => s.id === id ? { ...s, ...rect } : s)
+      setCanvasSections(updatedSections)
+      // Re-layout notes relative to new section origin
+      const notesInSection = canvasNotes.filter((n) => n.section_id === id)
+      const ownerIds = [...new Set(notesInSection.map((n) => n.owner_id))]
+      const posUpdates: Array<{ id: string; x: number; y: number }> = []
+      const baseY = rect.y + DONE_SECTION_HEADER + DONE_PAD + DONE_COL_HEADER
+      ownerIds.forEach((ownerId, colIdx) => {
+        notesInSection
+          .filter((n) => n.owner_id === ownerId)
+          .forEach((n, rowIdx) => {
+            posUpdates.push({
+              id: n.id,
+              x: rect.x + DONE_PAD + colIdx * (DONE_NOTE_W + DONE_COL_GAP),
+              y: baseY + rowIdx * (DONE_NOTE_H + DONE_NOTE_GAP),
+            })
+          })
+      })
+      if (posUpdates.length > 0) {
+        setCanvasNotes((prev) =>
+          prev.map((n) => {
+            const u = posUpdates.find((p) => p.id === n.id)
+            return u ? { ...n, x: u.x, y: u.y } : n
+          })
+        )
+        Promise.all(
+          posUpdates.map((u) =>
+            fetch(`/api/cards/${u.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ x: u.x, y: u.y }),
+            })
+          )
+        )
+      }
+    }
   }
 
   function toggleEditMode() {
     setEditMode((v) => !v)
     setPendingRect(null)
     setContextMenu(null)
+    setSelectedSectionId(null)
+    setSelectedNoteId(null)
+    sectionUndoStack.current = []
   }
 
   // ── Canvas note handlers ──
@@ -973,16 +902,6 @@ export default function BoardCanvas({
   }
 
   // ── Derived ──
-  const normalized = groupAndNormalize(
-    users,
-    optimisticCards.filter((card, index, self) =>
-      index === self.findLastIndex((c) => c.id === card.id)
-    )
-  )
-  const colStyle = getColumnStyle(users.length)
-  const gap = getContainerGap(users.length)
-
-  // Column info for each done section (owner columns ordered by first appearance)
   const doneSectionColumns: Record<string, Array<{ displayName: string; color: string }>> = {}
   for (const section of canvasSections) {
     if (!section.isDone) continue
@@ -1023,7 +942,7 @@ export default function BoardCanvas({
         minScale={0.25}
         maxScale={2.5}
         limitToBounds={false}
-        panning={{ disabled: isDraggingCard || isDrawing, velocityDisabled: true }}
+        panning={{ disabled: isDrawing, velocityDisabled: true }}
         smooth={true}
         wheel={{ step: 0.0015 }}
         doubleClick={{ disabled: true }}
@@ -1033,6 +952,10 @@ export default function BoardCanvas({
             editMode={editMode}
             role={role}
             sections={canvasSections}
+            selectedSectionId={selectedSectionId}
+            onSelectSection={setSelectedSectionId}
+            selectedNoteId={selectedNoteId}
+            onSelectNote={setSelectedNoteId}
             pendingRect={pendingRect}
             onPendingRect={setPendingRect}
             onShowContextMenu={(x, y, rect) => setContextMenu({ x, y, rect })}
@@ -1044,17 +967,8 @@ export default function BoardCanvas({
             onToggleSectionDone={handleToggleSectionDone}
             doneSectionColumns={doneSectionColumns}
             users={users}
-            normalizedCards={normalized}
             currentUserId={currentUserId}
             boardId={boardId}
-            colStyle={colStyle}
-            gap={gap}
-            setIsDraggingCard={setIsDraggingCard}
-            handleDragEnd={handleDragEnd}
-            onOptimisticDelete={handleOptimisticDelete}
-            onOptimisticComplete={handleOptimisticComplete}
-            onOptimisticReopen={handleOptimisticReopen}
-            onRevert={handleRevert}
             canvasNotes={canvasNotes}
             autoEditNoteId={autoEditNoteId}
             onAutoEditDone={() => setAutoEditNoteId(null)}
@@ -1184,6 +1098,37 @@ export default function BoardCanvas({
             </button>
           </div>
         </>
+      )}
+
+      {/* ── Section delete confirm ── */}
+      {deleteConfirmSectionId && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 200, backgroundColor: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{ background: "white", borderRadius: 14, padding: "28px 32px", boxShadow: "0 8px 32px rgba(0,0,0,0.18)", minWidth: 320, fontFamily: "var(--font-sora,'Sora',sans-serif)" }}
+          >
+            <p style={{ fontSize: 15, fontWeight: 600, color: "#222", marginBottom: 8 }}>Delete section?</p>
+            <p style={{ fontSize: 13, color: "#666", marginBottom: 24, lineHeight: 1.5 }}>
+              The section will be removed. All cards inside will remain on the canvas as free notes.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setDeleteConfirmSectionId(null)}
+                style={{ padding: "7px 18px", borderRadius: 8, border: "1.5px solid #ddd", background: "white", fontSize: 13, fontWeight: 500, cursor: "pointer", color: "#555" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteSection(deleteConfirmSectionId)}
+                style={{ padding: "7px 18px", borderRadius: 8, border: "none", background: "#ef4444", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

@@ -62,3 +62,24 @@ export async function PATCH(
     headers: { "Content-Type": "application/json" },
   })
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return new NextResponse(JSON.stringify({ error: "Unauthorized" }), { status: 401 })
+
+  const { data: profile } = await supabase
+    .from("users")
+    .select("team_id, role")
+    .eq("id", user.id)
+    .single()
+  if (!profile || profile.role !== "admin")
+    return new NextResponse(JSON.stringify({ error: "Forbidden" }), { status: 403 })
+
+  const { id } = await context.params
+  await supabase.from("sections").delete().eq("id", id).eq("team_id", profile.team_id)
+  return new NextResponse(null, { status: 204 })
+}

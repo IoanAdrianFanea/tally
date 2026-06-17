@@ -1,6 +1,8 @@
 "use client"
 
 import type { CSSProperties } from "react"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 type Props = {
   displayName: string | null
@@ -14,21 +16,74 @@ function getInitials(name: string | null | undefined) {
   return t ? t[0]!.toUpperCase() : "?"
 }
 
-// Logout is handled exclusively via the VaultMenu footer button.
-// This component is now a pure avatar display — no dropdown.
 export default function UserMenu({ displayName, columnColor }: Props) {
+  const router = useRouter()
+  const [hovered, setHovered] = useState(false)
+
+  async function handleLogout() {
+    // The signout route handles Supabase signout + redirect server-side
+    window.location.href = "/auth/signout"
+  }
+
   return (
     <div
-      className="w-9 h-9 rounded-full flex items-center justify-center
-        text-white text-sm font-bold shrink-0 select-none"
-      style={{
-        ...soraFont,
-        backgroundColor: columnColor ?? "#4648d4",
-      }}
-      aria-label={displayName ?? "User"}
-      title={displayName ?? "User"}
+      style={{ position: "relative", display: "inline-flex" }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      {getInitials(displayName)}
+      <div
+        className="w-9 h-9 rounded-full flex items-center justify-center
+          text-white text-sm font-bold shrink-0 select-none cursor-pointer"
+        style={{ ...soraFont, backgroundColor: columnColor ?? "#4648d4" }}
+        aria-label={displayName ?? "User"}
+        title={displayName ?? "User"}
+      >
+        {getInitials(displayName)}
+      </div>
+
+      {hovered && (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 8px)",
+            right: 0,
+            backgroundColor: "white",
+            borderRadius: 10,
+            boxShadow: "0 4px 20px rgba(0,0,0,0.14)",
+            border: "1px solid rgba(0,0,0,0.07)",
+            overflow: "hidden",
+            minWidth: 140,
+            zIndex: 200,
+            ...soraFont,
+          }}
+        >
+          {displayName && (
+            <div style={{ padding: "9px 14px 6px", fontSize: 12, fontWeight: 600, color: "#888" }}>
+              {displayName}
+            </div>
+          )}
+          <button
+            onClick={handleLogout}
+            style={{
+              display: "block",
+              width: "100%",
+              padding: "8px 14px",
+              textAlign: "left",
+              fontSize: 13,
+              fontWeight: 500,
+              color: "#ef4444",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              borderTop: displayName ? "1px solid #f3f3f3" : "none",
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#fff5f5" }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "transparent" }}
+          >
+            Log out
+          </button>
+        </div>
+      )}
     </div>
   )
 }

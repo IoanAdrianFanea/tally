@@ -3,6 +3,7 @@
 import { useRef, useState, useEffect } from "react"
 import { X } from "lucide-react"
 
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type CanvasCard = {
@@ -21,7 +22,9 @@ type Props = {
   color: string
   canEdit: boolean
   canMove?: boolean
+  isSelected?: boolean
   autoEdit?: boolean
+  onSelect?: () => void
   onPositionCommit: (x: number, y: number) => void
   onContentSave: (content: string) => void
   onDelete: () => void
@@ -58,7 +61,9 @@ export default function StickyNote({
   color,
   canEdit,
   canMove: canMoveProp,
+  isSelected,
   autoEdit,
+  onSelect,
   onPositionCommit,
   onContentSave,
   onDelete,
@@ -177,7 +182,9 @@ export default function StickyNote({
         borderRadius: 8,
         boxSizing: "border-box",
         cursor: canMove && !isEditing ? "move" : "default",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
+        boxShadow: isSelected
+          ? `0 0 0 2px ${borderColor}, 0 2px 8px rgba(0,0,0,0.10)`
+          : "0 2px 8px rgba(0,0,0,0.10)",
         zIndex: 5,
         display: "flex",
         flexDirection: "column",
@@ -185,6 +192,7 @@ export default function StickyNote({
         userSelect: isEditing ? "text" : "none",
       }}
       onMouseDown={handleMouseDown}
+      onClick={(e) => { e.stopPropagation(); onSelect?.() }}
       onDoubleClick={handleDoubleClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
