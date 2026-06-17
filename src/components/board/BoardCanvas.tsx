@@ -9,7 +9,7 @@ import { TransformWrapper, TransformComponent, useTransformContext, useTransform
 
 import { StickyNote as StickyNoteIcon } from "lucide-react"
 import Column from "@/components/board/Column"
-import CanvasSection, { type SectionData } from "@/components/board/CanvasSection"
+import CanvasSection, { type SectionData, DONE_PAD, DONE_SECTION_HEADER, DONE_COL_HEADER, DONE_COL_GAP, DONE_NOTE_GAP, DONE_NOTE_W, DONE_NOTE_H } from "@/components/board/CanvasSection"
 import StickyNote, { type CanvasCard } from "@/components/board/StickyNote"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -135,6 +135,8 @@ type CanvasContentProps = {
   onSectionDragStart: () => void
   onCommitSection: (id: string, pos: { x: number; y: number }) => void
   onCommitSectionResize: (id: string, rect: { x: number; y: number; width: number; height: number }) => void
+  onToggleSectionDone: (id: string) => void
+  doneSectionColumns: Record<string, Array<{ displayName: string; color: string }>>
   users: User[]
   normalizedCards: Record<string, Card[]>
   currentUserId: string
@@ -167,6 +169,8 @@ function CanvasContent({
   onSectionDragStart,
   onCommitSection,
   onCommitSectionResize,
+  onToggleSectionDone,
+  doneSectionColumns,
   users,
   normalizedCards,
   currentUserId,
@@ -290,6 +294,8 @@ function CanvasContent({
           onDragStart={onSectionDragStart}
           onCommit={(pos) => onCommitSection(s.id, pos)}
           onCommitResize={(rect) => onCommitSectionResize(s.id, rect)}
+          onToggleDone={() => onToggleSectionDone(s.id)}
+          doneColumns={doneSectionColumns[s.id] ?? []}
         />
       ))}
 
@@ -298,6 +304,8 @@ function CanvasContent({
         const owner = users.find((u) => u.id === note.owner_id)
         const color = owner?.column_color ?? "#6366f1"
         const canEdit = note.owner_id === currentUserId || role === "admin"
+        const noteSection = note.section_id ? sections.find((s) => s.id === note.section_id) : null
+        const canMove = canEdit
         return (
           <StickyNote
             key={note.id}
@@ -305,6 +313,7 @@ function CanvasContent({
             scale={scale}
             color={color}
             canEdit={canEdit}
+            canMove={canMove}
             autoEdit={note.id === autoEditNoteId}
             onPositionCommit={(x, y) => onUpdateNotePosition(note.id, x, y)}
             onContentSave={(content) => onUpdateNoteContent(note.id, content)}
@@ -409,7 +418,7 @@ export default function BoardCanvas({
   const [canvasNotes, setCanvasNotes] = useState<CanvasCard[]>(
     cards
       .filter((c) => (c.x ?? 0) !== 0 || (c.y ?? 0) !== 0)
-      .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status }))
+      .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status, section_id: c.section_id }))
   )
   const [autoEditNoteId, setAutoEditNoteId] = useState<string | null>(null)
   const [isDraggingCard, setIsDraggingCard] = useState(false)
@@ -420,7 +429,7 @@ export default function BoardCanvas({
     setCanvasNotes(
       cards
         .filter((c) => (c.x ?? 0) !== 0 || (c.y ?? 0) !== 0)
-        .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status }))
+        .map((c) => ({ id: c.id, content: c.content, owner_id: c.owner_id, x: c.x ?? 0, y: c.y ?? 0, status: c.status, section_id: c.section_id }))
     )
   }, [cards.length, cards.map((c) => c.id + c.status + c.position + c.content + c.x + c.y).join(",")])
 
@@ -464,7 +473,7 @@ export default function BoardCanvas({
           if (isCanvasNote) {
             setCanvasNotes((prev) => {
               if (prev.some((n) => n.id === newCard.id)) return prev
-              return [...prev, { id: newCard.id, content: newCard.content, owner_id: newCard.owner_id, x: newCard.x ?? 0, y: newCard.y ?? 0, status: newCard.status }]
+              return [...prev, { id: newCard.id, content: newCard.content, owner_id: newCard.owner_id, x: newCard.x ?? 0, y: newCard.y ?? 0, status: newCard.status, section_id: newCard.section_id }]
             })
           } else {
             setOptimisticCards((prev) => {
@@ -480,7 +489,7 @@ export default function BoardCanvas({
             setCanvasNotes((prev) =>
               prev.map((n) =>
                 n.id === updated.id
-                  ? { id: updated.id, content: updated.content, owner_id: updated.owner_id, x: updated.x ?? 0, y: updated.y ?? 0, status: updated.status }
+                  ? { id: updated.id, content: updated.content, owner_id: updated.owner_id, x: updated.x ?? 0, y: updated.y ?? 0, status: updated.status, section_id: updated.section_id }
                   : n
               )
             )
@@ -541,7 +550,7 @@ export default function BoardCanvas({
   // ── Edit mode + canvas sections state ──
   const [editMode, setEditMode] = useState(false)
   const [canvasSections, setCanvasSections] = useState<SectionData[]>(
-    _dbSections.map((s) => ({ id: s.id, name: s.name, x: s.x, y: s.y, width: s.width, height: s.height }))
+    _dbSections.map((s) => ({ id: s.id, name: s.name, x: s.x, y: s.y, width: s.width, height: s.height, isDone: s.is_done_section }))
   )
   const [pendingRect, setPendingRect] = useState<RectData | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; rect: RectData } | null>(null)
@@ -554,7 +563,7 @@ export default function BoardCanvas({
     const { rect } = contextMenu
     // Optimistic: add with a temp id immediately
     const tempId = crypto.randomUUID()
-    const optimistic: SectionData = { id: tempId, name: "Container", ...rect }
+    const optimistic: SectionData = { id: tempId, name: "Container", ...rect, isDone: false }
     setCanvasSections((prev) => [...prev, optimistic])
     setPendingRect(null)
     setContextMenu(null)
@@ -618,6 +627,114 @@ export default function BoardCanvas({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ x: pos.x, y: pos.y }),
     })
+    // If this is a done section, also translate all its notes
+    const dx = pos.x - orig.x
+    const dy = pos.y - orig.y
+    if (orig.isDone && (dx !== 0 || dy !== 0)) {
+      const notesInSection = canvasNotes.filter((n) => n.section_id === id)
+      if (notesInSection.length > 0) {
+        const moved = notesInSection.map((n) => ({ ...n, x: n.x + dx, y: n.y + dy }))
+        setCanvasNotes((prev) =>
+          prev.map((n) => moved.find((m) => m.id === n.id) ?? n)
+        )
+        Promise.all(
+          moved.map((n) =>
+            fetch(`/api/cards/${n.id}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ x: n.x, y: n.y }),
+            })
+          )
+        )
+      }
+    }
+  }
+
+  async function handleToggleSectionDone(id: string) {
+    const section = canvasSections.find((s) => s.id === id)
+    if (!section) return
+    const newIsDone = !section.isDone
+
+    if (newIsDone) {
+      // Collect notes physically inside this section's bounds
+      const notesInSection = canvasNotes.filter(
+        (n) =>
+          n.x >= section.x &&
+          n.x + DONE_NOTE_W <= section.x + section.width &&
+          n.y >= section.y &&
+          n.y + DONE_NOTE_H <= section.y + section.height
+      )
+
+      // Group by owner (stable insertion order)
+      const ownerIds = [...new Set(notesInSection.map((n) => n.owner_id))]
+      const byOwner: Record<string, CanvasCard[]> = {}
+      for (const ownerId of ownerIds) {
+        byOwner[ownerId] = notesInSection.filter((n) => n.owner_id === ownerId)
+      }
+
+      const maxNotes = ownerIds.length > 0
+        ? Math.max(...ownerIds.map((o) => byOwner[o].length))
+        : 0
+
+      // Required size — expand section if needed
+      const requiredW =
+        DONE_PAD * 2 + ownerIds.length * DONE_NOTE_W + Math.max(0, ownerIds.length - 1) * DONE_COL_GAP
+      const requiredH =
+        DONE_SECTION_HEADER + DONE_PAD + DONE_COL_HEADER + maxNotes * (DONE_NOTE_H + DONE_NOTE_GAP)
+
+      const newWidth = Math.max(section.width, requiredW)
+      const newHeight = Math.max(section.height, requiredH)
+
+      // Compute new absolute positions for each note
+      const posUpdates: Array<{ id: string; x: number; y: number; section_id: string }> = []
+      ownerIds.forEach((ownerId, colIdx) => {
+        byOwner[ownerId].forEach((note, noteIdx) => {
+          posUpdates.push({
+            id: note.id,
+            x: section.x + DONE_PAD + colIdx * (DONE_NOTE_W + DONE_COL_GAP),
+            y: section.y + DONE_SECTION_HEADER + DONE_PAD + DONE_COL_HEADER + noteIdx * (DONE_NOTE_H + DONE_NOTE_GAP),
+            section_id: id,
+          })
+        })
+      })
+
+      // Optimistic state update
+      setCanvasSections((prev) =>
+        prev.map((s) => s.id === id ? { ...s, isDone: true, width: newWidth, height: newHeight } : s)
+      )
+      setCanvasNotes((prev) =>
+        prev.map((n) => {
+          const u = posUpdates.find((p) => p.id === n.id)
+          return u ? { ...n, x: u.x, y: u.y, section_id: u.section_id } : n
+        })
+      )
+
+      // Persist
+      await fetch(`/api/sections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_done_section: true, width: newWidth, height: newHeight }),
+      })
+      await Promise.all(
+        posUpdates.map((u) =>
+          fetch(`/api/cards/${u.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ x: u.x, y: u.y, section_id: u.section_id }),
+          })
+        )
+      )
+    } else {
+      // Unmark as done — keep notes where they are
+      setCanvasSections((prev) =>
+        prev.map((s) => s.id === id ? { ...s, isDone: false } : s)
+      )
+      await fetch(`/api/sections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_done_section: false }),
+      })
+    }
   }
 
   function handleCommitSectionResize(id: string, rect: { x: number; y: number; width: number; height: number }) {
@@ -660,7 +777,7 @@ export default function BoardCanvas({
       setCanvasNotes((prev) =>
         prev.map((n) =>
           n.id === tempId
-            ? { id: saved.id, content: saved.content?.trim() ?? "", owner_id: saved.owner_id, x: saved.x ?? 300, y: saved.y ?? 300, status: saved.status }
+            ? { id: saved.id, content: saved.content?.trim() ?? "", owner_id: saved.owner_id, x: saved.x ?? 300, y: saved.y ?? 300, status: saved.status, section_id: saved.section_id ?? null }
             : n
         )
       )
@@ -671,13 +788,173 @@ export default function BoardCanvas({
     }
   }
 
-  async function handleUpdateNotePosition(id: string, x: number, y: number) {
-    setCanvasNotes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y } : n)))
-    await fetch(`/api/cards/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ x, y }),
+  // Re-layout all notes still in a done section after one leaves (collapses gaps)
+  function reLayoutDoneSection(sectionId: string, notesSnapshot: CanvasCard[]) {
+    const section = canvasSections.find((s) => s.id === sectionId)
+    if (!section) return
+    const remaining = notesSnapshot.filter((n) => n.section_id === sectionId)
+    const ownerIds = [...new Set(remaining.map((n) => n.owner_id))]
+
+    const posUpdates: Array<{ id: string; x: number; y: number }> = []
+    ownerIds.forEach((ownerId, colIdx) => {
+      remaining
+        .filter((n) => n.owner_id === ownerId)
+        .forEach((note, noteIdx) => {
+          posUpdates.push({
+            id: note.id,
+            x: section.x + DONE_PAD + colIdx * (DONE_NOTE_W + DONE_COL_GAP),
+            y:
+              section.y +
+              DONE_SECTION_HEADER +
+              DONE_PAD +
+              DONE_COL_HEADER +
+              noteIdx * (DONE_NOTE_H + DONE_NOTE_GAP),
+          })
+        })
     })
+
+    setCanvasNotes((prev) =>
+      prev.map((n) => {
+        const u = posUpdates.find((p) => p.id === n.id)
+        return u ? { ...n, x: u.x, y: u.y } : n
+      })
+    )
+    Promise.all(
+      posUpdates.map((u) =>
+        fetch(`/api/cards/${u.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ x: u.x, y: u.y }),
+        })
+      )
+    )
+  }
+
+  async function handleUpdateNotePosition(id: string, x: number, y: number) {
+    // Use center-point of the note to detect the containing section
+    const cx = x + DONE_NOTE_W / 2
+    const cy = y + DONE_NOTE_H / 2
+    const containingSection = canvasSections.find(
+      (s) => cx >= s.x && cx <= s.x + s.width && cy >= s.y && cy <= s.y + s.height
+    )
+
+    // Note's previous done section (if any) — needed for re-layout on exit
+    const prevNote = canvasNotes.find((n) => n.id === id)
+    const prevDoneSectionId =
+      prevNote?.section_id &&
+      canvasSections.find((s) => s.id === prevNote.section_id)?.isDone
+        ? prevNote.section_id
+        : null
+
+    if (containingSection?.isDone) {
+      const note = canvasNotes.find((n) => n.id === id)
+      if (!note) return
+
+      // All other notes already in this done section
+      const otherNotes = canvasNotes.filter(
+        (n) => n.section_id === containingSection.id && n.id !== id
+      )
+
+      // Column order — preserve existing owners, append this note's owner if new
+      const ownerIds = [...new Set(otherNotes.map((n) => n.owner_id))]
+      if (!ownerIds.includes(note.owner_id)) ownerIds.push(note.owner_id)
+
+      // Compute insert row from the dropped y position
+      const baseY = containingSection.y + DONE_SECTION_HEADER + DONE_PAD + DONE_COL_HEADER
+      const notesInOwnerCol = otherNotes.filter((n) => n.owner_id === note.owner_id)
+      const rawIdx = Math.round((y - baseY) / (DONE_NOTE_H + DONE_NOTE_GAP))
+      const insertIdx = Math.max(0, Math.min(rawIdx, notesInOwnerCol.length))
+
+      // Build ordered note list for the whole section with the moved note inserted
+      const noteWithSection = { ...note, section_id: containingSection.id }
+      const allSectionNotes: CanvasCard[] = []
+      for (const ownerId of ownerIds) {
+        const col = otherNotes.filter((n) => n.owner_id === ownerId)
+        if (ownerId === note.owner_id) col.splice(insertIdx, 0, noteWithSection)
+        allSectionNotes.push(...col)
+      }
+
+      // Compute absolute grid positions for every note in the section
+      const posUpdates: Array<{ id: string; x: number; y: number; section_id: string }> = []
+      ownerIds.forEach((ownerId, colIdx) => {
+        allSectionNotes
+          .filter((n) => n.owner_id === ownerId)
+          .forEach((n, rowIdx) => {
+            posUpdates.push({
+              id: n.id,
+              x: containingSection.x + DONE_PAD + colIdx * (DONE_NOTE_W + DONE_COL_GAP),
+              y: baseY + rowIdx * (DONE_NOTE_H + DONE_NOTE_GAP),
+              section_id: containingSection.id,
+            })
+          })
+      })
+
+      // Expand section only if needed
+      const maxRows = ownerIds.length
+        ? Math.max(...ownerIds.map((o) => allSectionNotes.filter((n) => n.owner_id === o).length))
+        : 0
+      const requiredW =
+        DONE_PAD * 2 + ownerIds.length * DONE_NOTE_W + Math.max(0, ownerIds.length - 1) * DONE_COL_GAP
+      const requiredH =
+        DONE_SECTION_HEADER + DONE_PAD + DONE_COL_HEADER + maxRows * (DONE_NOTE_H + DONE_NOTE_GAP)
+      const newWidth = Math.max(containingSection.width, requiredW)
+      const newHeight = Math.max(containingSection.height, requiredH)
+
+      // Optimistic state — update every note in the section at once
+      setCanvasNotes((prev) =>
+        prev.map((n) => {
+          const u = posUpdates.find((p) => p.id === n.id)
+          return u ? { ...n, x: u.x, y: u.y, section_id: u.section_id } : n
+        })
+      )
+      if (newWidth !== containingSection.width || newHeight !== containingSection.height) {
+        setCanvasSections((prev) =>
+          prev.map((s) =>
+            s.id === containingSection.id ? { ...s, width: newWidth, height: newHeight } : s
+          )
+        )
+        fetch(`/api/sections/${containingSection.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ width: newWidth, height: newHeight }),
+        })
+      }
+
+      await Promise.all(
+        posUpdates.map((u) =>
+          fetch(`/api/cards/${u.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ x: u.x, y: u.y, section_id: u.section_id }),
+          })
+        )
+      )
+
+      // Re-layout the old done section if this note moved from a different one
+      if (prevDoneSectionId && prevDoneSectionId !== containingSection.id) {
+        const afterMove = canvasNotes.map((n) =>
+          n.id === id ? { ...n, section_id: containingSection.id } : n
+        )
+        reLayoutDoneSection(prevDoneSectionId, afterMove)
+      }
+    } else {
+      // Free placement — drop outside any done section
+      const section_id = containingSection?.id ?? null
+      setCanvasNotes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y, section_id } : n)))
+      await fetch(`/api/cards/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ x, y, section_id }),
+      })
+
+      // Re-layout remaining notes in the old done section
+      if (prevDoneSectionId) {
+        const afterMove = canvasNotes.map((n) =>
+          n.id === id ? { ...n, x, y, section_id } : n
+        )
+        reLayoutDoneSection(prevDoneSectionId, afterMove)
+      }
+    }
   }
 
   async function handleUpdateNoteContent(id: string, content: string) {
@@ -704,6 +981,18 @@ export default function BoardCanvas({
   )
   const colStyle = getColumnStyle(users.length)
   const gap = getContainerGap(users.length)
+
+  // Column info for each done section (owner columns ordered by first appearance)
+  const doneSectionColumns: Record<string, Array<{ displayName: string; color: string }>> = {}
+  for (const section of canvasSections) {
+    if (!section.isDone) continue
+    const notesInSection = canvasNotes.filter((n) => n.section_id === section.id)
+    const ownerIds = [...new Set(notesInSection.map((n) => n.owner_id))]
+    doneSectionColumns[section.id] = ownerIds.map((ownerId) => {
+      const user = users.find((u) => u.id === ownerId)
+      return { displayName: user?.display_name ?? "Unknown", color: user?.column_color ?? "#6366f1" }
+    })
+  }
 
   return (
     <div
@@ -752,6 +1041,8 @@ export default function BoardCanvas({
             onSectionDragStart={handleSectionDragStart}
             onCommitSection={handleCommitSection}
             onCommitSectionResize={handleCommitSectionResize}
+            onToggleSectionDone={handleToggleSectionDone}
+            doneSectionColumns={doneSectionColumns}
             users={users}
             normalizedCards={normalized}
             currentUserId={currentUserId}

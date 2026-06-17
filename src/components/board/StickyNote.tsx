@@ -12,6 +12,7 @@ export type CanvasCard = {
   x: number
   y: number
   status: string | null
+  section_id?: string | null
 }
 
 type Props = {
@@ -19,6 +20,7 @@ type Props = {
   scale: number
   color: string
   canEdit: boolean
+  canMove?: boolean
   autoEdit?: boolean
   onPositionCommit: (x: number, y: number) => void
   onContentSave: (content: string) => void
@@ -55,22 +57,23 @@ export default function StickyNote({
   scale,
   color,
   canEdit,
+  canMove: canMoveProp,
   autoEdit,
   onPositionCommit,
   onContentSave,
   onDelete,
   onAutoEditDone,
 }: Props) {
-  const [localX, setLocalX] = useState(note.x)
-  const [localY, setLocalY] = useState(note.y)
+  const canMove = canMoveProp ?? canEdit
+  const [dragDeltaX, setDragDeltaX] = useState(0)
+  const [dragDeltaY, setDragDeltaY] = useState(0)
+  const dragDeltaRef = useRef({ x: 0, y: 0 })
   const [content, setContent] = useState(note.content)
   const [isEditing, setIsEditing] = useState(autoEdit ?? false)
   const [isHovered, setIsHovered] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { setLocalX(note.x) }, [note.x])
-  useEffect(() => { setLocalY(note.y) }, [note.y])
   useEffect(() => { setContent(note.content) }, [note.content])
 
   useEffect(() => {
@@ -103,29 +106,35 @@ export default function StickyNote({
 
   function handleMouseDown(e: React.MouseEvent) {
     if (isEditing) return
-    if (!canEdit) return
+    if (!canMove) return
     if ((e.target as HTMLElement).dataset.delete) return
     e.preventDefault()
     e.stopPropagation()
 
     const startX = e.clientX
     const startY = e.clientY
-    const origX = localX
-    const origY = localY
-    let currentX = origX
-    let currentY = origY
 
     function onMove(me: MouseEvent) {
-      currentX = origX + (me.clientX - startX) / scale
-      currentY = origY + (me.clientY - startY) / scale
-      setLocalX(currentX)
-      setLocalY(currentY)
+      const dx = (me.clientX - startX) / scale
+      const dy = (me.clientY - startY) / scale
+      dragDeltaRef.current = { x: dx, y: dy }
+      setDragDeltaX(dx)
+      setDragDeltaY(dy)
     }
 
     function onUp() {
       window.removeEventListener("mousemove", onMove)
       window.removeEventListener("mouseup", onUp)
-      onPositionCommit(currentX, currentY)
+      const finalX = note.x + dragDeltaRef.current.x
+      const finalY = note.y + dragDeltaRef.current.y
+      // Call commit first — updates parent state synchronously before its first await,
+      // so it batches with the delta reset in the same React flush.
+      onPositionCommit(finalX, finalY)
+      // Reset delta — batched with parent's setCanvasNotes, so the note renders
+      // directly at the authoritative position with no intermediate flicker.
+      setDragDeltaX(0)
+      setDragDeltaY(0)
+      dragDeltaRef.current = { x: 0, y: 0 }
     }
 
     window.addEventListener("mousemove", onMove)
@@ -159,15 +168,15 @@ export default function StickyNote({
       ref={containerRef}
       style={{
         position: "absolute",
-        left: localX,
-        top: localY,
+        left: note.x + dragDeltaX,
+        top: note.y + dragDeltaY,
         width: NOTE_WIDTH,
         height: NOTE_HEIGHT,
         backgroundColor: bgColor,
         border: `1.5px solid ${borderColor}`,
         borderRadius: 8,
         boxSizing: "border-box",
-        cursor: canEdit && !isEditing ? "move" : "default",
+        cursor: canMove && !isEditing ? "move" : "default",
         boxShadow: "0 2px 8px rgba(0,0,0,0.10)",
         zIndex: 5,
         display: "flex",

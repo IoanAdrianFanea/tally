@@ -32,7 +32,7 @@ export async function PATCH(
 
   const { id } = await context.params
   const body = await request.json()
-  const { name, x, y, width, height } = body
+  const { name, x, y, width, height, is_done_section } = body
 
   const updates: Record<string, unknown> = {}
   if (name !== undefined) updates.name = name
@@ -40,6 +40,7 @@ export async function PATCH(
   if (y !== undefined) updates.y = y
   if (width !== undefined) updates.width = width
   if (height !== undefined) updates.height = height
+  if (is_done_section !== undefined) updates.is_done_section = is_done_section
 
   const { data, error } = await supabase
     .from("sections")

@@ -11,7 +11,17 @@ export type SectionData = {
   width: number
   height: number
   name: string
+  isDone: boolean
 }
+
+// ─── Done-section layout constants (shared with BoardCanvas) ─────────────────
+export const DONE_PAD = 12
+export const DONE_SECTION_HEADER = 34
+export const DONE_COL_HEADER = 28
+export const DONE_COL_GAP = 16
+export const DONE_NOTE_GAP = 8
+export const DONE_NOTE_W = 160
+export const DONE_NOTE_H = 120
 
 type Props = {
   section: SectionData
@@ -23,6 +33,8 @@ type Props = {
   onDragStart: () => void
   onCommit: (pos: { x: number; y: number }) => void
   onCommitResize: (rect: { x: number; y: number; width: number; height: number }) => void
+  onToggleDone: () => void
+  doneColumns: Array<{ displayName: string; color: string }>
 }
 
 const MIN_SIZE = 80
@@ -48,6 +60,8 @@ export default function CanvasSection({
   onDragStart,
   onCommit,
   onCommitResize,
+  onToggleDone,
+  doneColumns,
 }: Props) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [nameValue, setNameValue] = useState(section.name)
@@ -138,10 +152,14 @@ export default function CanvasSection({
         top: section.y,
         width: section.width,
         height: section.height,
-        backgroundColor: "rgba(215, 215, 228, 0.52)",
+        backgroundColor: section.isDone
+          ? "rgba(34, 197, 94, 0.06)"
+          : "rgba(215, 215, 228, 0.52)",
         border:
           isSelected && editMode
             ? "2px solid #6366f1"
+            : section.isDone
+            ? "1.5px solid rgba(34, 197, 94, 0.45)"
             : "1.5px solid rgba(140, 140, 175, 0.4)",
         borderRadius: 10,
         boxSizing: "border-box",
@@ -155,7 +173,7 @@ export default function CanvasSection({
         onSelect()
       }}
     >
-      {/* Name label */}
+      {/* Name label — top-left */}
       <div style={{ position: "absolute", top: 7, left: 10, zIndex: 1 }}>
         {isRenaming && editMode ? (
           <input
@@ -186,7 +204,7 @@ export default function CanvasSection({
             style={{
               fontSize: 12,
               fontWeight: 600,
-              color: "#666",
+              color: section.isDone ? "#16a34a" : "#666",
               cursor: editMode ? "text" : "default",
             }}
             onDoubleClick={(e) => {
@@ -199,6 +217,86 @@ export default function CanvasSection({
           </span>
         )}
       </div>
+
+      {/* Done toggle button — top-right, edit mode only */}
+      {editMode && (
+        <button
+          style={{
+            position: "absolute",
+            top: 5,
+            right: 8,
+            fontSize: 10,
+            fontWeight: 600,
+            padding: "2px 7px",
+            borderRadius: 8,
+            border: `1.5px solid ${section.isDone ? "#22c55e" : "#ccc"}`,
+            backgroundColor: section.isDone ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.8)",
+            color: section.isDone ? "#16a34a" : "#888",
+            cursor: "pointer",
+            lineHeight: 1.4,
+            zIndex: 3,
+            fontFamily: "var(--font-sora, 'Sora', sans-serif)",
+          }}
+          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault() }}
+          onClick={(e) => { e.stopPropagation(); onToggleDone() }}
+        >
+          {section.isDone ? "✓ Done" : "Set as Done"}
+        </button>
+      )}
+
+      {/* Column headers — shown inside done sections */}
+      {section.isDone && doneColumns.length > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: DONE_SECTION_HEADER,
+            left: DONE_PAD,
+            display: "flex",
+            gap: DONE_COL_GAP,
+            zIndex: 1,
+            pointerEvents: "none",
+          }}
+        >
+          {doneColumns.map((col, i) => (
+            <div
+              key={i}
+              style={{
+                width: DONE_NOTE_W,
+                height: DONE_COL_HEADER,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                paddingBottom: 4,
+                borderBottom: `2px solid ${col.color}`,
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  backgroundColor: col.color,
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#555",
+                  fontFamily: "var(--font-sora, 'Sora', sans-serif)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {col.displayName}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Resize handles — shown only when selected in edit mode */}
       {editMode &&
