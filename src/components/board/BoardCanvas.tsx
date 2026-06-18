@@ -100,6 +100,9 @@ type CanvasContentProps = {
   onUpdateNoteContent: (id: string, content: string) => void
   onDeleteNote: (id: string) => void
   onShowCanvasContextMenu: (screenX: number, screenY: number, canvasX: number, canvasY: number) => void
+  anchor: { x: number; y: number } | null
+  onAnchorMove: (pos: { x: number; y: number }) => void
+  onAnchorDelete: () => void
 }
 
 function CanvasContent({
@@ -130,6 +133,9 @@ function CanvasContent({
   onUpdateNoteContent,
   onDeleteNote,
   onShowCanvasContextMenu,
+  anchor,
+  onAnchorMove,
+  onAnchorDelete,
 }: CanvasContentProps) {
   const ctx = useTransformContext()
   // Reactive scale for rendering (re-renders CanvasContent when zoom changes)
@@ -143,6 +149,42 @@ function CanvasContent({
   } | null>(null)
 
   const [drawRect, setDrawRect] = useState<RectData | null>(null)
+  const [isAnchorHovered, setIsAnchorHovered] = useState(false)
+
+  // ── Per-section min sizes (based on contained card positions) ──
+  const NOTE_W_INNER = 160
+  const NOTE_H_INNER = 120
+  const CONTENT_PAD = 20
+  const sectionMinSizes: Record<string, { minWidth: number; minHeight: number }> = {}
+  for (const section of sections) {
+    const notesInSection = canvasNotes.filter((n) => n.section_id === section.id)
+    if (notesInSection.length === 0) continue
+    let maxRelRight = NOTE_W_INNER + CONTENT_PAD
+    let maxRelBottom = NOTE_H_INNER + CONTENT_PAD
+    for (const note of notesInSection) {
+      maxRelRight = Math.max(maxRelRight, note.x - section.x + NOTE_W_INNER + CONTENT_PAD)
+      maxRelBottom = Math.max(maxRelBottom, note.y - section.y + NOTE_H_INNER + CONTENT_PAD)
+    }
+    sectionMinSizes[section.id] = { minWidth: maxRelRight, minHeight: maxRelBottom }
+  }
+
+  function handleAnchorMouseDown(e: React.MouseEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startY = e.clientY
+    const origX = anchor!.x
+    const origY = anchor!.y
+    function onMove(me: MouseEvent) {
+      onAnchorMove({ x: origX + (me.clientX - startX) / scaleRef.current, y: origY + (me.clientY - startY) / scaleRef.current })
+    }
+    function onUp() {
+      window.removeEventListener("mousemove", onMove)
+      window.removeEventListener("mouseup", onUp)
+    }
+    window.addEventListener("mousemove", onMove)
+    window.addEventListener("mouseup", onUp)
+  }
 
   useEffect(() => {
     if (!editMode) onSelectSection(null)
@@ -239,6 +281,8 @@ function CanvasContent({
           onCommitResize={(rect) => onCommitSectionResize(s.id, rect)}
           onToggleDone={() => onToggleSectionDone(s.id)}
           doneColumns={doneSectionColumns[s.id] ?? []}
+          minWidth={sectionMinSizes[s.id]?.minWidth}
+          minHeight={sectionMinSizes[s.id]?.minHeight}
         />
       ))}
 
@@ -302,6 +346,57 @@ function CanvasContent({
             zIndex: 20,
           }}
         />
+      )}
+
+      {/* ── Anchor marker (edit mode only) ── */}
+      {editMode && anchor && (
+        <div
+          style={{
+            position: "absolute",
+            left: anchor.x - 14,
+            top: anchor.y - 14,
+            width: 28,
+            height: 28,
+            zIndex: 60,
+            cursor: "move",
+            userSelect: "none",
+          }}
+          onMouseDown={handleAnchorMouseDown}
+          onMouseEnter={() => setIsAnchorHovered(true)}
+          onMouseLeave={() => setIsAnchorHovered(false)}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation() }}
+        >
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style={{ display: "block" }}>
+            <circle cx="14" cy="14" r="12" fill="rgba(234,179,8,0.18)" stroke="#eab308" strokeWidth="1.5" />
+            <line x1="9" y1="9" x2="19" y2="19" stroke="#eab308" strokeWidth="2.5" strokeLinecap="round" />
+            <line x1="19" y1="9" x2="9" y2="19" stroke="#eab308" strokeWidth="2.5" strokeLinecap="round" />
+          </svg>
+          {/* Delete button on hover */}
+          {isAnchorHovered && (
+            <div
+              style={{
+                position: "absolute",
+                top: -8,
+                right: -8,
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                backgroundColor: "#ef4444",
+                color: "white",
+                fontSize: 12,
+                fontWeight: 700,
+                lineHeight: "18px",
+                textAlign: "center",
+                cursor: "pointer",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.2)",
+              }}
+              onMouseDown={(e) => { e.preventDefault(); e.stopPropagation() }}
+              onClick={(e) => { e.stopPropagation(); onAnchorDelete() }}
+            >
+              ×
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
@@ -462,6 +557,16 @@ export default function BoardCanvas({
     setAnchor(a)
     setCanvasRightClickMenu(null)
     try { localStorage.setItem(`anchor_${boardId}`, JSON.stringify(a)) } catch {}
+  }
+
+  function handleAnchorMove(pos: { x: number; y: number }) {
+    setAnchor(pos)
+    try { localStorage.setItem(`anchor_${boardId}`, JSON.stringify(pos)) } catch {}
+  }
+
+  function handleAnchorDelete() {
+    setAnchor(null)
+    try { localStorage.removeItem(`anchor_${boardId}`) } catch {}
   }
 
   function handleGoToAnchor() {
@@ -1047,6 +1152,9 @@ export default function BoardCanvas({
             onUpdateNoteContent={handleUpdateNoteContent}
             onDeleteNote={handleDeleteNote}
             onShowCanvasContextMenu={(sx, sy, cx, cy) => setCanvasRightClickMenu({ screenX: sx, screenY: sy, canvasX: cx, canvasY: cy })}
+            anchor={anchor}
+            onAnchorMove={handleAnchorMove}
+            onAnchorDelete={handleAnchorDelete}
           />
         </TransformComponent>
       </TransformWrapper>

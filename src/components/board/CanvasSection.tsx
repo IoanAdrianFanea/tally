@@ -35,6 +35,8 @@ type Props = {
   onCommitResize: (rect: { x: number; y: number; width: number; height: number }) => void
   onToggleDone: () => void
   doneColumns: Array<{ displayName: string; color: string }>
+  minWidth?: number
+  minHeight?: number
 }
 
 const MIN_SIZE = 80
@@ -62,6 +64,8 @@ export default function CanvasSection({
   onCommitResize,
   onToggleDone,
   doneColumns,
+  minWidth,
+  minHeight,
 }: Props) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [nameValue, setNameValue] = useState(section.name)
@@ -115,20 +119,22 @@ export default function CanvasSection({
     const orig = { x: section.x, y: section.y, width: section.width, height: section.height }
 
     let finalRect = { ...orig }
+    const effectiveMinW = Math.max(MIN_SIZE, minWidth ?? 0)
+    const effectiveMinH = Math.max(MIN_SIZE, minHeight ?? 0)
     function onMove(me: MouseEvent) {
       const dx = (me.clientX - startX) / scale
       const dy = (me.clientY - startY) / scale
       let { x, y, width, height } = orig
 
-      if (handle.includes("e")) width = Math.max(MIN_SIZE, orig.width + dx)
-      if (handle.includes("s")) height = Math.max(MIN_SIZE, orig.height + dy)
+      if (handle.includes("e")) width = Math.max(effectiveMinW, orig.width + dx)
+      if (handle.includes("s")) height = Math.max(effectiveMinH, orig.height + dy)
       if (handle.includes("w")) {
-        const newW = Math.max(MIN_SIZE, orig.width - dx)
+        const newW = Math.max(effectiveMinW, orig.width - dx)
         x = orig.x + orig.width - newW
         width = newW
       }
       if (handle.includes("n")) {
-        const newH = Math.max(MIN_SIZE, orig.height - dy)
+        const newH = Math.max(effectiveMinH, orig.height - dy)
         y = orig.y + orig.height - newH
         height = newH
       }
