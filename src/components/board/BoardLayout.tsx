@@ -98,6 +98,7 @@ export default function BoardLayout({
           <UserMenu
             displayName={profile?.display_name ?? null}
             columnColor={profile?.column_color ?? null}
+            points={users.find((u) => u.id === currentUserId)?.points ?? null}
           />
         </div>
       </header>

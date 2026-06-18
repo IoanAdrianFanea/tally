@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation"
 type Props = {
   displayName: string | null
   columnColor: string | null
+  points?: number | null
 }
 
 const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
@@ -16,7 +17,7 @@ function getInitials(name: string | null | undefined) {
   return t ? t[0]!.toUpperCase() : "?"
 }
 
-export default function UserMenu({ displayName, columnColor }: Props) {
+export default function UserMenu({ displayName, columnColor, points }: Props) {
   const router = useRouter()
   const [hovered, setHovered] = useState(false)
 
@@ -27,10 +28,32 @@ export default function UserMenu({ displayName, columnColor }: Props) {
 
   return (
     <div
-      style={{ position: "relative", display: "inline-flex" }}
+      style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8 }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
     >
+      {/* Points pill */}
+      {typeof points === "number" && (
+        <div
+          style={{
+            ...soraFont,
+            display: "flex",
+            alignItems: "center",
+            gap: 3,
+            padding: "2px 8px",
+            borderRadius: 999,
+            backgroundColor: "rgba(99,102,241,0.10)",
+            border: "1px solid rgba(99,102,241,0.20)",
+            fontSize: 12,
+            fontWeight: 700,
+            color: "#6366f1",
+            userSelect: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {points} pts
+        </div>
+      )}
       <div
         className="w-9 h-9 rounded-full flex items-center justify-center
           text-white text-sm font-bold shrink-0 select-none cursor-pointer"

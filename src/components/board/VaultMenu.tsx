@@ -68,6 +68,7 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
 
   // Leaderboard
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
+  const [todayLeaderboard, setTodayLeaderboard] = useState<LeaderboardEntry[]>([])
   const [cardStats, setCardStats] = useState({ total: 0, completed: 0 })
   const [loadingLeaderboard, setLoadingLeaderboard] = useState(false)
 
@@ -84,10 +85,12 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
 
     Promise.all([
       fetch("/api/stats/leaderboard", { signal: controller.signal }).then(r => r.json()),
+      fetch("/api/stats/today", { signal: controller.signal }).then(r => r.json()),
       fetch("/api/cards", { signal: controller.signal }).then(r => r.json()),
     ])
-      .then(([lbData, cardsData]) => {
+      .then(([lbData, todayData, cardsData]) => {
         setLeaderboard(lbData.leaderboard ?? [])
+        setTodayLeaderboard(todayData.leaderboard ?? [])
         const allCards = cardsData.cards ?? []
         const mine = allCards.filter((c: { owner_id: string }) => c.owner_id === currentUserId)
         setCardStats({
@@ -371,6 +374,50 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
                   </ul>
                 )}
               </section>
+
+              {/* Today's Points */}
+              <section>
+                <p className="text-[0.6875rem] font-bold text-on-surface-variant/70 uppercase tracking-[0.08em] mb-3" style={soraFont}>
+                  Today&apos;s Points
+                </p>
+                {loadingLeaderboard ? (
+                  <p className="text-sm text-on-surface-variant">Loading…</p>
+                ) : todayLeaderboard.filter(e => e.points > 0).length === 0 ? (
+                  <p className="text-sm text-on-surface-variant" style={soraFont}>No completions today yet.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {todayLeaderboard.filter(e => e.points > 0).map((entry, i) => (
+                      <li
+                        key={entry.user_id}
+                        className="flex items-center justify-between px-3 py-2 rounded-xl
+                          transition-colors hover:bg-surface-container-low/60"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <div
+                            className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: entry.column_color ?? "#6366f1" }}
+                          />
+                          <span className="text-[0.875rem] font-semibold text-on-surface" style={soraFont}>
+                            {entry.display_name}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`text-[0.875rem] font-bold ${
+                              i === 0 ? "text-primary" : "text-on-surface-variant"
+                            }`}
+                            style={soraFont}
+                          >
+                            {entry.points}
+                          </span>
+                          <span className="text-[0.75rem] text-on-surface-variant/60" style={soraFont}>pts</span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+
             </div>
           )}
 

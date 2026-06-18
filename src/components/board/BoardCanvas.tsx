@@ -70,6 +70,116 @@ const CANVAS_WIDTH = 6000
 const CANVAS_HEIGHT = 4000
 const MIN_DRAW_SIZE = 40
 
+const MINI_SIZE = 120          // circle diameter in px
+const MINI_R = MINI_SIZE / 2   // circle radius
+// How many canvas-px are shown per minimap-px at the base (unhoverd) zoom.
+// Higher = more zoomed out.  2500 canvas-px maps to one minimap-radius.
+const MINI_CONTEXT_BASE = 3000
+const MINI_CONTEXT_HOVER = 2000
+
+// ─── MinimapOverlay (standalone — no TransformWrapper hooks) ────────────────
+
+type MinimapOverlayProps = {
+  sections: SectionData[]
+  notes: CanvasCard[]
+  users: User[]
+  positionX: number
+  positionY: number
+  scale: number
+  vw: number
+  vh: number
+}
+
+function MinimapOverlay({ sections, notes, users, positionX, positionY, scale: s, vw, vh }: MinimapOverlayProps) {
+  const [hovered, setHovered] = useState(false)
+
+  // Canvas coords of viewport center
+  const vpCx = -positionX / s + vw / (2 * s)
+  const vpCy = -positionY / s + vh / (2 * s)
+
+  // The ratio used for base (constant position math) — based on zoomed-out context
+  const baseRatio = MINI_R / MINI_CONTEXT_BASE
+  // Content scale factor applied via CSS transform (hover zooms in)
+  const contentScale = hovered ? MINI_CONTEXT_BASE / MINI_CONTEXT_HOVER : 1
+
+  // Convert canvas coords → minimap coords (centered on viewport)
+  function mx(cx: number) { return MINI_R + (cx - vpCx) * baseRatio }
+  function my(cy: number) { return MINI_R + (cy - vpCy) * baseRatio }
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        bottom: 16,
+        left: 16,
+        zIndex: 40,
+        width: MINI_SIZE,
+        height: MINI_SIZE,
+        borderRadius: "50%",
+        overflow: "hidden",
+        boxShadow: hovered
+          ? "0 4px 18px rgba(0,0,0,0.18)"
+          : "0 2px 10px rgba(0,0,0,0.12)",
+        border: "1.5px solid rgba(140,140,175,0.35)",
+        cursor: "default",
+        pointerEvents: "auto",
+        transition: "box-shadow 0.2s ease",
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      <svg width={MINI_SIZE} height={MINI_SIZE} style={{ display: "block" }}>
+        {/* Background */}
+        <circle cx={MINI_R} cy={MINI_R} r={MINI_R} fill="rgba(249,249,255,0.96)" />
+
+        {/* Content group — CSS scale on hover zooms the map content in */}
+        <g
+          style={{
+            transform: `translate(${MINI_R}px,${MINI_R}px) scale(${contentScale}) translate(-${MINI_R}px,-${MINI_R}px)`,
+            transition: "transform 0.25s ease",
+          }}
+        >
+          {/* Sections */}
+          {sections.map((sec) => (
+            <rect
+              key={sec.id}
+              x={mx(sec.x)}
+              y={my(sec.y)}
+              width={Math.max(1, sec.width * baseRatio)}
+              height={Math.max(1, sec.height * baseRatio)}
+              fill={sec.isDone ? "rgba(34,197,94,0.22)" : "rgba(215,215,228,0.7)"}
+              stroke={sec.isDone ? "rgba(34,197,94,0.55)" : "rgba(140,140,175,0.5)"}
+              strokeWidth={0.5}
+              rx={0.5}
+            />
+          ))}
+
+          {/* Notes */}
+          {notes.map((n) => {
+            const owner = users.find((u) => u.id === n.owner_id)
+            const color = owner?.column_color ?? "#6366f1"
+            return (
+              <rect
+                key={n.id}
+                x={mx(n.x)}
+                y={my(n.y)}
+                width={Math.max(1.5, 160 * baseRatio)}
+                height={Math.max(1, 120 * baseRatio)}
+                fill={color}
+                opacity={0.65}
+                rx={0.5}
+              />
+            )
+          })}
+        </g>
+
+        {/* Subtle vignette ring for depth */}
+        <circle cx={MINI_R} cy={MINI_R} r={MINI_R - 0.75} fill="none" stroke="rgba(140,140,175,0.18)" strokeWidth={1.5} />
+      </svg>
+    </div>
+  )
+}
+
 // ─── CanvasContent (must be defined at module scope, not inside BoardCanvas) ──
 
 type CanvasContentProps = {
@@ -493,6 +603,7 @@ export default function BoardCanvas({
 
   const transformRef = useRef<ReactZoomPanPinchRef>(null)
   const outerRef = useRef<HTMLDivElement>(null)
+  const [transformState, setTransformState] = useState({ positionX: 0, positionY: 0, scale: 1 })
   const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(() => {
     if (typeof window === "undefined") return null
     try {
@@ -1122,6 +1233,7 @@ export default function BoardCanvas({
         smooth={true}
         wheel={{ step: 0.0015 }}
         doubleClick={{ disabled: true }}
+        onTransform={(_ref, state) => setTransformState({ positionX: state.positionX, positionY: state.positionY, scale: state.scale })}
       >
         <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
           <CanvasContent
@@ -1158,6 +1270,18 @@ export default function BoardCanvas({
           />
         </TransformComponent>
       </TransformWrapper>
+
+      {/* ── Minimap ── */}
+      <MinimapOverlay
+        sections={canvasSections}
+        notes={canvasNotes}
+        users={users}
+        positionX={transformState.positionX}
+        positionY={transformState.positionY}
+        scale={transformState.scale}
+        vw={outerRef.current?.clientWidth ?? 0}
+        vh={outerRef.current?.clientHeight ?? 0}
+      />
 
       {/* ── Right-side floating buttons ── */}
       <div
