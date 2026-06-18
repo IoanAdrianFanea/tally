@@ -1,13 +1,15 @@
 "use client"
 
 import type { CSSProperties } from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { createClient } from "@/lib/supabase/client"
 
 type Props = {
   displayName: string | null
   columnColor: string | null
   points?: number | null
+  boardId?: string | null
+  currentUserId?: string
 }
 
 const soraFont: CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
@@ -17,9 +19,44 @@ function getInitials(name: string | null | undefined) {
   return t ? t[0]!.toUpperCase() : "?"
 }
 
-export default function UserMenu({ displayName, columnColor, points }: Props) {
-  const router = useRouter()
+export default function UserMenu({ displayName, columnColor, points: initialPoints, boardId, currentUserId }: Props) {
   const [hovered, setHovered] = useState(false)
+  const [livePoints, setLivePoints] = useState<number | null>(initialPoints ?? null)
+
+  // Keep initial points in sync if props change (e.g. board navigation)
+  useEffect(() => { setLivePoints(initialPoints ?? null) }, [initialPoints])
+
+  // Subscribe to card changes on this board to keep points live
+  useEffect(() => {
+    if (!boardId || !currentUserId) return
+    const supabase = createClient()
+
+    // Fetch current count immediately
+    supabase
+      .from("cards")
+      .select("id", { count: "exact", head: true })
+      .eq("board_id", boardId)
+      .eq("owner_id", currentUserId)
+      .eq("status", "green")
+      .then(({ count }) => { if (count !== null) setLivePoints(count) })
+
+    const channel = supabase
+      .channel(`user-points-${boardId}-${currentUserId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "cards", filter: `board_id=eq.${boardId}` }, () => {
+        supabase
+          .from("cards")
+          .select("id", { count: "exact", head: true })
+          .eq("board_id", boardId)
+          .eq("owner_id", currentUserId)
+          .eq("status", "green")
+          .then(({ count }) => { if (count !== null) setLivePoints(count) })
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [boardId, currentUserId])
+
+  const displayPoints = livePoints
 
   async function handleLogout() {
     // The signout route handles Supabase signout + redirect server-side
@@ -33,7 +70,7 @@ export default function UserMenu({ displayName, columnColor, points }: Props) {
       onMouseLeave={() => setHovered(false)}
     >
       {/* Points pill */}
-      {typeof points === "number" && (
+      {typeof displayPoints === "number" && (
         <div
           style={{
             ...soraFont,
@@ -51,7 +88,7 @@ export default function UserMenu({ displayName, columnColor, points }: Props) {
             whiteSpace: "nowrap",
           }}
         >
-          {points} pts
+          {displayPoints} pts
         </div>
       )}
       <div

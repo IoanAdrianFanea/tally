@@ -45,6 +45,8 @@ type Props = {
   currentUserId: string
   profile: Profile | null
   users: User[]
+  boardId: string | null
+  currentDate: string
 }
 
 type NavView = "board" | "settings" | "leaderboard"
@@ -61,10 +63,11 @@ function getInitials(name: string | null | undefined) {
 // Shared Sora font style — applied to all text elements
 const soraFont: React.CSSProperties = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
 
-export default function VaultMenu({ role, currentUserId, profile }: Props) {
+export default function VaultMenu({ role, currentUserId, profile, boardId, currentDate }: Props) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [activeView, setActiveView] = useState<NavView>("leaderboard")
+  const [openCount, setOpenCount] = useState(0)
 
   // Leaderboard
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
@@ -83,10 +86,16 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
     const controller = new AbortController()
     setLoadingLeaderboard(true)
 
+    const cardsUrl = boardId
+      ? `/api/cards?board_id=${boardId}`
+      : "/api/cards"
+
+    const todayUrl = `/api/stats/today?date=${encodeURIComponent(currentDate)}`
+
     Promise.all([
       fetch("/api/stats/leaderboard", { signal: controller.signal }).then(r => r.json()),
-      fetch("/api/stats/today", { signal: controller.signal }).then(r => r.json()),
-      fetch("/api/cards", { signal: controller.signal }).then(r => r.json()),
+      fetch(todayUrl, { signal: controller.signal }).then(r => r.json()),
+      fetch(cardsUrl, { signal: controller.signal }).then(r => r.json()),
     ])
       .then(([lbData, todayData, cardsData]) => {
         setLeaderboard(lbData.leaderboard ?? [])
@@ -102,7 +111,7 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
       .finally(() => setLoadingLeaderboard(false))
 
     return () => controller.abort()
-  }, [isOpen, activeView, currentUserId])
+  }, [isOpen, activeView, currentUserId, boardId, openCount])
 
   async function handleArchiveOnly() {
     setArchiveLoading(true)
@@ -191,7 +200,7 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
       {/* ── Floating trigger ── */}
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => { setIsOpen(true); setOpenCount(c => c + 1) }}
         aria-label="Open menu"
         className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50
           w-11 h-11 rounded-full
@@ -375,10 +384,10 @@ export default function VaultMenu({ role, currentUserId, profile }: Props) {
                 )}
               </section>
 
-              {/* Today's Points */}
+              {/* Date Points */}
               <section>
                 <p className="text-[0.6875rem] font-bold text-on-surface-variant/70 uppercase tracking-[0.08em] mb-3" style={soraFont}>
-                  Today&apos;s Points
+                  {currentDate === new Date().toISOString().slice(0, 10) ? "Today's Points" : `Points — ${currentDate}`}
                 </p>
                 {loadingLeaderboard ? (
                   <p className="text-sm text-on-surface-variant">Loading…</p>

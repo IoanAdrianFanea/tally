@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
-import { NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -13,13 +13,16 @@ export async function GET() {
     .single()
   if (!profile) return NextResponse.json({ error: "Profile not found" }, { status: 404 })
 
-  const today = new Date().toISOString().slice(0, 10)
+  const dateParam = request.nextUrl.searchParams.get("date")
+  const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)
+    ? dateParam
+    : new Date().toISOString().slice(0, 10)
 
   const { data: board } = await supabase
     .from("boards")
     .select("id")
     .eq("team_id", profile.team_id)
-    .eq("date", today)
+    .eq("date", date)
     .maybeSingle()
 
   if (!board) return NextResponse.json({ leaderboard: [] })

@@ -99,6 +99,8 @@ export default function BoardLayout({
             displayName={profile?.display_name ?? null}
             columnColor={profile?.column_color ?? null}
             points={users.find((u) => u.id === currentUserId)?.points ?? null}
+            boardId={boardId}
+            currentUserId={currentUserId}
           />
         </div>
       </header>
@@ -129,6 +131,8 @@ export default function BoardLayout({
         currentUserId={currentUserId}
         profile={profile}
         users={users}
+        boardId={boardId}
+        currentDate={currentDate}
       />
     </div>
   )
