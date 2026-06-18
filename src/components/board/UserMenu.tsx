@@ -1,7 +1,7 @@
 "use client"
 
 import type { CSSProperties } from "react"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 
 type Props = {
@@ -20,7 +20,8 @@ function getInitials(name: string | null | undefined) {
 }
 
 export default function UserMenu({ displayName, columnColor, points: initialPoints, boardId, currentUserId }: Props) {
-  const [hovered, setHovered] = useState(false)
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [livePoints, setLivePoints] = useState<number | null>(initialPoints ?? null)
 
   // Keep initial points in sync if props change (e.g. board navigation)
@@ -58,6 +59,18 @@ export default function UserMenu({ displayName, columnColor, points: initialPoin
 
   const displayPoints = livePoints
 
+  // Close when clicking outside
+  useEffect(() => {
+    if (!open) return
+    function onDown(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", onDown)
+    return () => document.removeEventListener("mousedown", onDown)
+  }, [open])
+
   async function handleLogout() {
     // The signout route handles Supabase signout + redirect server-side
     window.location.href = "/auth/signout"
@@ -65,9 +78,8 @@ export default function UserMenu({ displayName, columnColor, points: initialPoin
 
   return (
     <div
+      ref={menuRef}
       style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8 }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
       {/* Points pill */}
       {typeof displayPoints === "number" && (
@@ -97,11 +109,12 @@ export default function UserMenu({ displayName, columnColor, points: initialPoin
         style={{ ...soraFont, backgroundColor: columnColor ?? "#4648d4" }}
         aria-label={displayName ?? "User"}
         title={displayName ?? "User"}
+        onClick={() => setOpen((v) => !v)}
       >
         {getInitials(displayName)}
       </div>
 
-      {hovered && (
+      {open && (
         <div
           style={{
             position: "absolute",
