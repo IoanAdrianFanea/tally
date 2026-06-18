@@ -2,9 +2,9 @@
 
 import { createClient } from "@/lib/supabase/client"
 import { useEffect, useRef, useState } from "react"
-import { TransformWrapper, TransformComponent, useTransformContext, useTransformComponent } from "react-zoom-pan-pinch"
+import { TransformWrapper, TransformComponent, useTransformContext, useTransformComponent, type ReactZoomPanPinchRef } from "react-zoom-pan-pinch"
 
-import { StickyNote as StickyNoteIcon } from "lucide-react"
+import { StickyNote as StickyNoteIcon, Navigation } from "lucide-react"
 import CanvasSection, { type SectionData, DONE_PAD, DONE_SECTION_HEADER, DONE_COL_HEADER, DONE_COL_GAP, DONE_NOTE_GAP, DONE_NOTE_W, DONE_NOTE_H } from "@/components/board/CanvasSection"
 import StickyNote, { type CanvasCard } from "@/components/board/StickyNote"
 
@@ -99,6 +99,7 @@ type CanvasContentProps = {
   onUpdateNotePosition: (id: string, x: number, y: number) => void
   onUpdateNoteContent: (id: string, content: string) => void
   onDeleteNote: (id: string) => void
+  onShowCanvasContextMenu: (screenX: number, screenY: number, canvasX: number, canvasY: number) => void
 }
 
 function CanvasContent({
@@ -128,6 +129,7 @@ function CanvasContent({
   onUpdateNotePosition,
   onUpdateNoteContent,
   onDeleteNote,
+  onShowCanvasContextMenu,
 }: CanvasContentProps) {
   const ctx = useTransformContext()
   // Reactive scale for rendering (re-renders CanvasContent when zoom changes)
@@ -212,12 +214,14 @@ function CanvasContent({
         height: CANVAS_HEIGHT,
         position: "relative",
         cursor: editMode ? "crosshair" : "default",
-        backgroundImage:
-          "radial-gradient(circle, rgba(100, 100, 160, 0.22) 1.5px, transparent 1.5px)",
-        backgroundSize: "28px 28px",
       }}
       onMouseDown={handleMouseDown}
-      onContextMenu={(e) => { if (editMode) e.preventDefault() }}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        if (!editMode || pendingRect) return
+        const coords = getCanvasCoords(e.clientX, e.clientY)
+        onShowCanvasContextMenu(e.clientX, e.clientY, coords.x, coords.y)
+      }}
     >
 
       {/* ── Sections ── */}
@@ -358,6 +362,28 @@ export default function BoardCanvas({
     return () => { supabase.removeChannel(channel) }
   }, [boardId])
 
+  // ── Auto-center on mount ──
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!transformRef.current || !outerRef.current) return
+      const vw = outerRef.current.clientWidth
+      const vh = outerRef.current.clientHeight
+      if (anchor) {
+        transformRef.current.setTransform(vw / 2 - anchor.x, vh / 2 - anchor.y, 1, 0, "easeOut")
+      } else if (canvasSections.length > 0) {
+        const minX = Math.min(...canvasSections.map((s) => s.x))
+        const maxX = Math.max(...canvasSections.map((s) => s.x + s.width))
+        const minY = Math.min(...canvasSections.map((s) => s.y))
+        const maxY = Math.max(...canvasSections.map((s) => s.y + s.height))
+        const cx = (minX + maxX) / 2
+        const cy = (minY + maxY) / 2
+        transformRef.current.setTransform(vw / 2 - cx, vh / 2 - cy, 1, 0, "easeOut")
+      }
+    }, 150)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ── Edit mode + canvas sections state ──
   const [editMode, setEditMode] = useState(false)
   const [canvasSections, setCanvasSections] = useState<SectionData[]>(
@@ -366,6 +392,19 @@ export default function BoardCanvas({
   const [pendingRect, setPendingRect] = useState<RectData | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; rect: RectData } | null>(null)
   const [isDrawing, setIsDrawing] = useState(false)
+  const [canvasRightClickMenu, setCanvasRightClickMenu] = useState<{
+    screenX: number; screenY: number; canvasX: number; canvasY: number
+  } | null>(null)
+
+  const transformRef = useRef<ReactZoomPanPinchRef>(null)
+  const outerRef = useRef<HTMLDivElement>(null)
+  const [anchor, setAnchor] = useState<{ x: number; y: number } | null>(() => {
+    if (typeof window === "undefined") return null
+    try {
+      const stored = localStorage.getItem(`anchor_${boardId}`)
+      return stored ? JSON.parse(stored) : null
+    } catch { return null }
+  })
 
   // ── Selection + undo ──
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
@@ -417,6 +456,20 @@ export default function BoardCanvas({
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
   }, [editMode, selectedSectionId, selectedNoteId, canvasSections])
+
+  function handleSetAnchor(canvasX: number, canvasY: number) {
+    const a = { x: canvasX, y: canvasY }
+    setAnchor(a)
+    setCanvasRightClickMenu(null)
+    try { localStorage.setItem(`anchor_${boardId}`, JSON.stringify(a)) } catch {}
+  }
+
+  function handleGoToAnchor() {
+    if (!anchor || !transformRef.current || !outerRef.current) return
+    const vw = outerRef.current.clientWidth
+    const vh = outerRef.current.clientHeight
+    transformRef.current.setTransform(vw / 2 - anchor.x, vh / 2 - anchor.y, 1, 600, "easeOut")
+  }
 
   async function handleDeleteSection(id: string) {
     setDeleteConfirmSectionId(null)
@@ -590,7 +643,7 @@ export default function BoardCanvas({
       setCanvasNotes((prev) =>
         prev.map((n) => {
           const u = posUpdates.find((p) => p.id === n.id)
-          return u ? { ...n, x: u.x, y: u.y, section_id: u.section_id } : n
+          return u ? { ...n, x: u.x, y: u.y, section_id: u.section_id, status: "green" } : n
         })
       )
 
@@ -600,25 +653,39 @@ export default function BoardCanvas({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_done_section: true, width: newWidth, height: newHeight }),
       })
+      const completedAtNow = new Date().toISOString()
       await Promise.all(
         posUpdates.map((u) =>
           fetch(`/api/cards/${u.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ x: u.x, y: u.y, section_id: u.section_id }),
+            body: JSON.stringify({ x: u.x, y: u.y, section_id: u.section_id, status: "green", completed_at: completedAtNow }),
           })
         )
       )
     } else {
-      // Unmark as done — keep notes where they are
+      // Unmark as done — keep notes where they are, revert status to open
+      const notesInSection = canvasNotes.filter((n) => n.section_id === id)
       setCanvasSections((prev) =>
         prev.map((s) => s.id === id ? { ...s, isDone: false } : s)
+      )
+      setCanvasNotes((prev) =>
+        prev.map((n) => n.section_id === id ? { ...n, status: "open" } : n)
       )
       await fetch(`/api/sections/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ is_done_section: false }),
       })
+      await Promise.all(
+        notesInSection.map((n) =>
+          fetch(`/api/cards/${n.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "open", completed_at: null }),
+          })
+        )
+      )
     }
   }
 
@@ -833,7 +900,8 @@ export default function BoardCanvas({
       setCanvasNotes((prev) =>
         prev.map((n) => {
           const u = posUpdates.find((p) => p.id === n.id)
-          return u ? { ...n, x: u.x, y: u.y, section_id: u.section_id } : n
+          if (!u) return n
+          return { ...n, x: u.x, y: u.y, section_id: u.section_id, ...(n.id === id ? { status: "green" } : {}) }
         })
       )
       if (newWidth !== containingSection.width || newHeight !== containingSection.height) {
@@ -849,17 +917,17 @@ export default function BoardCanvas({
         })
       }
 
+      const completedAt = new Date().toISOString()
       await Promise.all(
-        posUpdates.map((u) =>
-          fetch(`/api/cards/${u.id}`, {
+        posUpdates.map((u) => {
+          const statusFields = u.id === id ? { status: "green", completed_at: completedAt } : {}
+          return fetch(`/api/cards/${u.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ x: u.x, y: u.y, section_id: u.section_id }),
+            body: JSON.stringify({ x: u.x, y: u.y, section_id: u.section_id, ...statusFields }),
           })
-        )
+        })
       )
-
-      // Re-layout the old done section if this note moved from a different one
       if (prevDoneSectionId && prevDoneSectionId !== containingSection.id) {
         const afterMove = canvasNotes.map((n) =>
           n.id === id ? { ...n, section_id: containingSection.id } : n
@@ -869,11 +937,12 @@ export default function BoardCanvas({
     } else {
       // Free placement — drop outside any done section
       const section_id = containingSection?.id ?? null
-      setCanvasNotes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y, section_id } : n)))
+      const statusFields = prevDoneSectionId ? { status: "open" as const } : {}
+      setCanvasNotes((prev) => prev.map((n) => (n.id === id ? { ...n, x, y, section_id, ...statusFields } : n)))
       await fetch(`/api/cards/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ x, y, section_id }),
+        body: JSON.stringify({ x, y, section_id, ...(prevDoneSectionId ? { status: "open", completed_at: null } : {}) }),
       })
 
       // Re-layout remaining notes in the old done section
@@ -915,12 +984,13 @@ export default function BoardCanvas({
 
   return (
     <div
+      ref={outerRef}
       className="h-full w-full overflow-hidden rounded-xl relative"
-      style={
-        editMode
-          ? { boxShadow: "inset 0 0 0 2px rgba(99, 102, 241, 0.45)" }
-          : undefined
-      }
+      style={{
+        backgroundImage: "radial-gradient(circle, rgba(100, 100, 160, 0.22) 1.5px, transparent 1.5px)",
+        backgroundSize: "28px 28px",
+        ...(editMode ? { boxShadow: "inset 0 0 0 2px rgba(99, 102, 241, 0.45)" } : {}),
+      }}
     >
       {/* ── Edit mode vignette tint ── */}
       {editMode && (
@@ -938,6 +1008,7 @@ export default function BoardCanvas({
       )}
 
       <TransformWrapper
+        ref={transformRef}
         initialScale={1}
         minScale={0.25}
         maxScale={2.5}
@@ -975,6 +1046,7 @@ export default function BoardCanvas({
             onUpdateNotePosition={handleUpdateNotePosition}
             onUpdateNoteContent={handleUpdateNoteContent}
             onDeleteNote={handleDeleteNote}
+            onShowCanvasContextMenu={(sx, sy, cx, cy) => setCanvasRightClickMenu({ screenX: sx, screenY: sy, canvasX: cx, canvasY: cy })}
           />
         </TransformComponent>
       </TransformWrapper>
@@ -1022,6 +1094,38 @@ export default function BoardCanvas({
         >
           <StickyNoteIcon size={18} />
         </button>
+
+        {/* Go to anchor button — visible when anchor is set */}
+        {anchor && (
+          <button
+            onClick={handleGoToAnchor}
+            title="Return to anchor"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              backgroundColor: "white",
+              color: "#6366f1",
+              border: "2px solid #6366f1",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              transition: "background-color 0.15s, color 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = "#6366f1"
+              e.currentTarget.style.color = "white"
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = "white"
+              e.currentTarget.style.color = "#6366f1"
+            }}
+          >
+            <Navigation size={18} />
+          </button>
+        )}
 
         {/* Edit mode toggle — admin only */}
         {role === "admin" && (
@@ -1095,6 +1199,51 @@ export default function BoardCanvas({
               }
             >
               Create container
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* ── Canvas right-click (anchor) menu ── */}
+      {canvasRightClickMenu && (
+        <>
+          <div
+            style={{ position: "fixed", inset: 0, zIndex: 99 }}
+            onMouseDown={() => setCanvasRightClickMenu(null)}
+          />
+          <div
+            style={{
+              position: "fixed",
+              left: canvasRightClickMenu.screenX,
+              top: canvasRightClickMenu.screenY,
+              zIndex: 100,
+              backgroundColor: "white",
+              borderRadius: 8,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.14)",
+              border: "1px solid rgba(0,0,0,0.07)",
+              overflow: "hidden",
+              minWidth: 160,
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => handleSetAnchor(canvasRightClickMenu.canvasX, canvasRightClickMenu.canvasY)}
+              style={{
+                display: "block",
+                width: "100%",
+                padding: "9px 16px",
+                textAlign: "left",
+                fontSize: 13,
+                fontWeight: 500,
+                color: "#333",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f0f0ff")}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+            >
+              Set as anchor
             </button>
           </div>
         </>

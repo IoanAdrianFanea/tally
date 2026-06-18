@@ -106,6 +106,7 @@ export default function BoardLayout({
       <main className="h-[calc(100vh-80px)] mt-[4.5rem] mx-4 overflow-hidden">
         {boardId ? (
           <BoardCanvasShell
+            key={boardId}
             users={users}
             cards={cards}
             role={role}
