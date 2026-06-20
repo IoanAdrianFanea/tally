@@ -23,8 +23,12 @@ type Props = {
   canEdit: boolean
   canMove?: boolean
   isSelected?: boolean
+  isMultiSelected?: boolean
+  externalDragDelta?: { x: number; y: number }
   autoEdit?: boolean
-  onSelect?: () => void
+  onSelect?: (addToSelection: boolean) => void
+  onMultiDragStart?: (e: React.MouseEvent) => void
+  onContextMenu?: (e: React.MouseEvent) => void
   onPositionCommit: (x: number, y: number) => void
   onContentSave: (content: string) => void
   onDelete: () => void
@@ -62,8 +66,12 @@ export default function StickyNote({
   canEdit,
   canMove: canMoveProp,
   isSelected,
+  isMultiSelected,
+  externalDragDelta,
   autoEdit,
   onSelect,
+  onMultiDragStart,
+  onContextMenu,
   onPositionCommit,
   onContentSave,
   onDelete,
@@ -113,6 +121,15 @@ export default function StickyNote({
     if (isEditing) return
     if (!canMove) return
     if ((e.target as HTMLElement).dataset.delete) return
+
+    // Multi-drag: hand off to parent when this note is part of a multi-selection
+    if (isMultiSelected && onMultiDragStart) {
+      e.preventDefault()
+      e.stopPropagation()
+      onMultiDragStart(e)
+      return
+    }
+
     e.preventDefault()
     e.stopPropagation()
 
@@ -173,8 +190,8 @@ export default function StickyNote({
       ref={containerRef}
       style={{
         position: "absolute",
-        left: note.x + dragDeltaX,
-        top: note.y + dragDeltaY,
+        left: note.x + dragDeltaX + (externalDragDelta?.x ?? 0),
+        top: note.y + dragDeltaY + (externalDragDelta?.y ?? 0),
         width: NOTE_WIDTH,
         height: NOTE_HEIGHT,
         backgroundColor: bgColor,
@@ -182,18 +199,21 @@ export default function StickyNote({
         borderRadius: 8,
         boxSizing: "border-box",
         cursor: canMove && !isEditing ? "move" : "default",
-        boxShadow: isSelected
-          ? `0 0 0 2px ${borderColor}, 0 2px 8px rgba(0,0,0,0.10)`
+        boxShadow: isSelected || isMultiSelected
+          ? `0 0 0 2.5px ${borderColor}, 0 2px 8px rgba(0,0,0,0.10)`
           : "0 2px 8px rgba(0,0,0,0.10)",
-        zIndex: 5,
+        zIndex: isMultiSelected ? 8 : 5,
         display: "flex",
         flexDirection: "column",
         padding: "8px 10px",
         userSelect: isEditing ? "text" : "none",
+        outline: isMultiSelected ? `2px dashed ${borderColor}` : undefined,
+        outlineOffset: isMultiSelected ? 2 : undefined,
       }}
       onMouseDown={handleMouseDown}
-      onClick={(e) => { e.stopPropagation(); onSelect?.() }}
+      onClick={(e) => { e.stopPropagation(); onSelect?.(e.ctrlKey || e.metaKey) }}
       onDoubleClick={handleDoubleClick}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu?.(e) }}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

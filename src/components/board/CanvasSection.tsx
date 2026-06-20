@@ -37,6 +37,7 @@ type Props = {
   doneColumns: Array<{ displayName: string; color: string }>
   minWidth?: number
   minHeight?: number
+  onContextMenu?: (e: React.MouseEvent) => void
 }
 
 const MIN_SIZE = 80
@@ -66,6 +67,7 @@ export default function CanvasSection({
   doneColumns,
   minWidth,
   minHeight,
+  onContextMenu,
 }: Props) {
   const [isRenaming, setIsRenaming] = useState(false)
   const [nameValue, setNameValue] = useState(section.name)
@@ -177,6 +179,12 @@ export default function CanvasSection({
         if (!editMode) return
         e.stopPropagation()
         onSelect()
+      }}
+      onContextMenu={(e) => {
+        if (!editMode) return
+        e.preventDefault()
+        e.stopPropagation()
+        onContextMenu?.(e)
       }}
     >
       {/* Name label — top-left */}
