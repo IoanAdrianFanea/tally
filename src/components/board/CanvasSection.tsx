@@ -28,6 +28,7 @@ type Props = {
   scale: number
   editMode: boolean
   isSelected: boolean
+  isMultiSelected?: boolean
   onSelect: () => void
   onChange: (updates: Partial<SectionData>) => void
   onDragStart: () => void
@@ -58,6 +59,7 @@ export default function CanvasSection({
   scale,
   editMode,
   isSelected,
+  isMultiSelected,
   onSelect,
   onChange,
   onDragStart,
@@ -164,14 +166,14 @@ export default function CanvasSection({
           ? "rgba(34, 197, 94, 0.06)"
           : "rgba(215, 215, 228, 0.52)",
         border:
-          isSelected && editMode
+          (isSelected || isMultiSelected) && editMode
             ? "2px solid #6366f1"
             : section.isDone
             ? "1.5px solid rgba(34, 197, 94, 0.45)"
             : "1.5px solid rgba(140, 140, 175, 0.4)",
         borderRadius: 10,
         boxSizing: "border-box",
-        cursor: editMode ? (isSelected ? "move" : "pointer") : "default",
+        cursor: editMode ? ((isSelected || isMultiSelected) ? "move" : "pointer") : "default",
         userSelect: "none",
       }}
       onMouseDown={handleBodyMouseDown}

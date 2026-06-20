@@ -195,6 +195,13 @@ type CanvasContentProps = {
   onSectionContextMenu: (id: string, screenX: number, screenY: number) => void
   onGroupDragCommit: (dx: number, dy: number) => void
   onLassoSelect: (ids: string[]) => void
+  onLassoSelectSections: (ids: string[], anchorInLasso: boolean) => void
+  selectedSectionIds: Set<string>
+  anchorSelected: boolean
+  draggingSectionDelta: {
+    dx: number; dy: number
+    origSections: Array<{ sectionId: string; origX: number; origY: number; origWidth: number; origHeight: number }>
+  } | null
   hasClipboard: boolean
   pendingRect: RectData | null
   onPendingRect: (r: RectData | null) => void
@@ -234,6 +241,10 @@ function CanvasContent({
   onSectionContextMenu,
   onGroupDragCommit,
   onLassoSelect,
+  onLassoSelectSections,
+  selectedSectionIds,
+  anchorSelected,
+  draggingSectionDelta,
   hasClipboard,
   pendingRect,
   onPendingRect,
@@ -349,15 +360,30 @@ function CanvasContent({
       window.removeEventListener("mouseup", onUp)
       const lasso = lassoRectRef.current
       if (lasso && didLassoDragRef.current) {
-        const NOTE_W = 160
-        const NOTE_H = 120
-        const ids = canvasNotes
-          .filter((n) =>
-            n.x + NOTE_W > lasso.x && n.x < lasso.x + lasso.w &&
-            n.y + NOTE_H > lasso.y && n.y < lasso.y + lasso.h
-          )
-          .map((n) => n.id)
-        onLassoSelect(ids)
+        if (editMode) {
+          // Edit mode: select sections and anchor
+          const sectionIds = sections
+            .filter((s) =>
+              s.x + s.width > lasso.x && s.x < lasso.x + lasso.w &&
+              s.y + s.height > lasso.y && s.y < lasso.y + lasso.h
+            )
+            .map((s) => s.id)
+          const anchorInLasso = anchor !== null &&
+            anchor.x >= lasso.x && anchor.x <= lasso.x + lasso.w &&
+            anchor.y >= lasso.y && anchor.y <= lasso.y + lasso.h
+          onLassoSelectSections(sectionIds, anchorInLasso)
+        } else {
+          // Normal mode: select notes
+          const NOTE_W = 160
+          const NOTE_H = 120
+          const ids = canvasNotes
+            .filter((n) =>
+              n.x + NOTE_W > lasso.x && n.x < lasso.x + lasso.w &&
+              n.y + NOTE_H > lasso.y && n.y < lasso.y + lasso.h
+            )
+            .map((n) => n.id)
+          onLassoSelect(ids)
+        }
       }
       lassoRectRef.current = null
       setLassoRect(null)
@@ -393,11 +419,15 @@ function CanvasContent({
   }
 
   function handleMouseDown(e: React.MouseEvent) {
-    // Non-edit mode: right-click drag = lasso select; plain left-click = clear selection
+    // Right-click drag = lasso select in any mode
+    if (e.button === 2) {
+      handleLassoStart(e)
+      return
+    }
+
+    // Non-edit mode: plain left-click = clear selection
     if (!editMode) {
-      if (e.button === 2) {
-        handleLassoStart(e)
-      } else if (e.button === 0 && !e.ctrlKey && !e.metaKey) {
+      if (e.button === 0 && !e.ctrlKey && !e.metaKey) {
         onClearNoteSelection()
       }
       return
@@ -490,6 +520,7 @@ function CanvasContent({
           scale={scale}
           editMode={editMode}
           isSelected={selectedSectionId === s.id}
+          isMultiSelected={selectedSectionIds.has(s.id)}
           onSelect={() => onSelectSection(s.id)}
           onChange={(updates) => onUpdateSection(s.id, updates)}
           onDragStart={onSectionDragStart}
@@ -512,6 +543,18 @@ function CanvasContent({
         const canMove = canEdit
         const isNoteSelected = selectedNoteIds.has(note.id)
         const isMultiSel = isNoteSelected && selectedNoteIds.size > 1
+        let sectionDragDelta: { x: number; y: number } | undefined
+        if (draggingSectionDelta) {
+          const { dx, dy, origSections } = draggingSectionDelta
+          const cx = note.x + 80
+          const cy = note.y + 60
+          for (const sec of origSections) {
+            if (cx >= sec.origX && cx <= sec.origX + sec.origWidth && cy >= sec.origY && cy <= sec.origY + sec.origHeight) {
+              sectionDragDelta = { x: dx, y: dy }
+              break
+            }
+          }
+        }
         return (
           <StickyNote
             key={note.id}
@@ -522,7 +565,7 @@ function CanvasContent({
             canMove={canMove}
             isSelected={isNoteSelected}
             isMultiSelected={isMultiSel}
-            externalDragDelta={isMultiSel ? (groupDragDelta ?? undefined) : undefined}
+            externalDragDelta={isMultiSel && groupDragDelta ? groupDragDelta : sectionDragDelta}
             autoEdit={note.id === autoEditNoteId}
             onSelect={(addToSelection) => onNoteSelect(note.id, addToSelection)}
             onMultiDragStart={handleGroupDragStart}
@@ -601,6 +644,9 @@ function CanvasContent({
             zIndex: 60,
             cursor: "move",
             userSelect: "none",
+            borderRadius: "50%",
+            outline: anchorSelected ? "2px solid #6366f1" : "none",
+            outlineOffset: 3,
           }}
           onMouseDown={handleAnchorMouseDown}
           onMouseEnter={() => setIsAnchorHovered(true)}
@@ -745,7 +791,12 @@ export default function BoardCanvas({
 
   // ── Selection + undo ──
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
+  const [selectedSectionIds, setSelectedSectionIds] = useState<Set<string>>(new Set())
   const [selectedNoteIds, setSelectedNoteIds] = useState<Set<string>>(new Set())
+  const [draggingSectionDelta, setDraggingSectionDelta] = useState<{
+    dx: number; dy: number
+    origSections: Array<{ sectionId: string; origX: number; origY: number; origWidth: number; origHeight: number }>
+  } | null>(null)
   const [clipboardCards, setClipboardCards] = useState<Array<{
     content: string
     owner_id: string
@@ -770,6 +821,9 @@ export default function BoardCanvas({
   } | null>(null)
   const [deleteConfirmSectionId, setDeleteConfirmSectionId] = useState<string | null>(null)
   const sectionUndoStack = useRef<SectionData[][]>([])
+  const cardUndoStack = useRef<CanvasCard[][]>([])
+  const [anchorSelected, setAnchorSelected] = useState(false)
+  const anchorBeforeDragRef = useRef<{ x: number; y: number } | null>(null)
 
   function pushUndo() {
     sectionUndoStack.current = [...sectionUndoStack.current.slice(-19), canvasSections]
@@ -782,6 +836,13 @@ export default function BoardCanvas({
       if (tag === "INPUT" || tag === "TEXTAREA") return
 
       if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedSectionIds.size > 0 && editMode) {
+          e.preventDefault()
+          const idsToDelete = [...selectedSectionIds]
+          setSelectedSectionIds(new Set())
+          for (const sid of idsToDelete) handleDeleteSection(sid)
+          return
+        }
         if (selectedSectionId && editMode) {
           e.preventDefault()
           setDeleteConfirmSectionId(selectedSectionId)
@@ -789,7 +850,10 @@ export default function BoardCanvas({
         }
         if (selectedNoteIds.size > 0) {
           e.preventDefault()
-          for (const id of selectedNoteIds) handleDeleteNote(id)
+          // Push whole batch as one undo entry before deleting
+          const toDelete = canvasNotes.filter((n) => selectedNoteIds.has(n.id))
+          if (toDelete.length > 0) cardUndoStack.current = [...cardUndoStack.current.slice(-19), toDelete]
+          for (const id of selectedNoteIds) handleDeleteNote(id, true)
           setSelectedNoteIds(new Set())
           return
         }
@@ -799,7 +863,7 @@ export default function BoardCanvas({
         if (selectedNoteIds.size > 0) {
           e.preventDefault()
           handleCopySelected()
-        } else if (selectedSectionId && editMode) {
+        } else if (selectedSectionId && editMode && selectedSectionIds.size <= 1) {
           e.preventDefault()
           handleCopySection(selectedSectionId)
         }
@@ -813,6 +877,49 @@ export default function BoardCanvas({
           e.preventDefault()
           handlePasteSection()
         }
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !editMode) {
+        e.preventDefault()
+        const stack = cardUndoStack.current
+        if (stack.length === 0) return
+        const batch = stack[stack.length - 1]!
+        cardUndoStack.current = stack.slice(0, -1)
+        ;(async () => {
+          const results = await Promise.all(
+            batch.map(async (note) => {
+              const res = await fetch("/api/cards", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  content: note.content || " ",
+                  board_id: boardId,
+                  owner_id: note.owner_id,
+                  x: note.x,
+                  y: note.y,
+                  section_id: note.section_id ?? null,
+                }),
+              })
+              if (!res.ok) return null
+              return res.json()
+            })
+          )
+          const restored = results.filter(Boolean)
+          if (restored.length === 0) return
+          setCanvasNotes((prev) => [
+            ...prev,
+            ...restored.map((c: Record<string, unknown>) => ({
+              id: c.id as string,
+              content: (c.content as string)?.trim() ?? "",
+              owner_id: c.owner_id as string,
+              x: (c.x as number) ?? 0,
+              y: (c.y as number) ?? 0,
+              status: c.status as "open" | "done",
+              section_id: (c.section_id as string) ?? undefined,
+            })),
+          ])
+        })()
+        return
       }
 
       if ((e.ctrlKey || e.metaKey) && e.key === "z" && editMode) {
@@ -834,7 +941,7 @@ export default function BoardCanvas({
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [editMode, selectedSectionId, selectedNoteIds, canvasSections, clipboardCards, clipboardSection])
+  }, [editMode, selectedSectionId, selectedSectionIds, selectedNoteIds, canvasSections, clipboardCards, clipboardSection])
 
   function handleNoteSelect(id: string, addToSelection: boolean) {
     if (addToSelection) {
@@ -1082,6 +1189,18 @@ export default function BoardCanvas({
     setSectionContextMenu({ screenX, screenY, sectionId })
   }
 
+  function handleSelectSection(id: string | null) {
+    setSelectedSectionId(id)
+    setSelectedSectionIds(new Set())
+    setAnchorSelected(false)
+  }
+
+  function handleLassoSelectSections(ids: string[], anchorInLasso: boolean) {
+    setSelectedSectionIds(new Set(ids))
+    setAnchorSelected(anchorInLasso)
+    if (ids.length > 0) setSelectedSectionId(ids[ids.length - 1])
+  }
+
   function handleSetAnchor(canvasX: number, canvasY: number) {
     const a = { x: canvasX, y: canvasY }
     setAnchor(a)
@@ -1166,6 +1285,49 @@ export default function BoardCanvas({
   function handleUpdateSection(id: string, updates: Partial<SectionData>) {
     // Only push undo for name changes (position/resize have their own commit)
     if (updates.name !== undefined) pushUndo()
+
+    if (updates.x !== undefined || updates.y !== undefined) {
+      const orig = sectionsBeforeDragRef.current.find((s) => s.id === id)
+      if (orig) {
+        const dx = (updates.x ?? orig.x) - orig.x
+        const dy = (updates.y ?? orig.y) - orig.y
+
+        if (selectedSectionIds.has(id) && selectedSectionIds.size > 1) {
+          // Multi-section group drag: apply same delta to every selected section
+          setCanvasSections((prev) =>
+            prev.map((s) => {
+              if (s.id === id) return { ...s, ...updates }
+              if (selectedSectionIds.has(s.id)) {
+                const origS = sectionsBeforeDragRef.current.find((os) => os.id === s.id)
+                if (origS) return { ...s, x: origS.x + dx, y: origS.y + dy }
+              }
+              return s
+            })
+          )
+          const origSections = [...selectedSectionIds].map((sid) => {
+            const os = sectionsBeforeDragRef.current.find((s) => s.id === sid)!
+            return { sectionId: sid, origX: os.x, origY: os.y, origWidth: os.width, origHeight: os.height }
+          })
+          setDraggingSectionDelta({ dx, dy, origSections })
+          // Move anchor along with group drag (live)
+          if (anchorSelected && anchorBeforeDragRef.current) {
+            setAnchor({ x: anchorBeforeDragRef.current.x + dx, y: anchorBeforeDragRef.current.y + dy })
+          }
+          return
+        }
+
+        // Single section drag
+        setCanvasSections((prev) =>
+          prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+        )
+        setDraggingSectionDelta({
+          dx, dy,
+          origSections: [{ sectionId: id, origX: orig.x, origY: orig.y, origWidth: orig.width, origHeight: orig.height }],
+        })
+        return
+      }
+    }
+
     setCanvasSections((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     )
@@ -1183,15 +1345,85 @@ export default function BoardCanvas({
 
   function handleSectionDragStart() {
     sectionsBeforeDragRef.current = canvasSections
+    anchorBeforeDragRef.current = anchor
+    setDraggingSectionDelta(null)
   }
 
   function handleCommitSection(id: string, pos: { x: number; y: number }) {
     const orig = sectionsBeforeDragRef.current.find((s) => s.id === id)
-    if (!orig) return
+    if (!orig) { setDraggingSectionDelta(null); return }
+
+    const isGroupDrag = selectedSectionIds.has(id) && selectedSectionIds.size > 1
+
+    if (isGroupDrag) {
+      const dx = pos.x - orig.x
+      const dy = pos.y - orig.y
+      const groupOrigs = [...selectedSectionIds].map((sid) => sectionsBeforeDragRef.current.find((s) => s.id === sid)!)
+      const nonSelected = sectionsBeforeDragRef.current.filter((s) => !selectedSectionIds.has(s.id))
+
+      // Check each moved section against non-selected sections for overlap
+      const hasOverlap = groupOrigs.some((os) => {
+        const moved = { ...os, x: os.x + dx, y: os.y + dy }
+        return nonSelected.some((other) => rectsOverlap(moved, other))
+      })
+
+      if (hasOverlap) {
+        setCanvasSections(sectionsBeforeDragRef.current)
+        setDraggingSectionDelta(null)
+        return
+      }
+
+      pushUndo()
+      setDraggingSectionDelta(null)
+
+      // Commit anchor move if it was part of the group selection
+      if (anchorSelected && anchorBeforeDragRef.current) {
+        const newAnchor = { x: anchorBeforeDragRef.current.x + dx, y: anchorBeforeDragRef.current.y + dy }
+        setAnchor(newAnchor)
+        try { localStorage.setItem(`anchor_${boardId}`, JSON.stringify(newAnchor)) } catch {}
+      }
+
+      // Persist all selected sections to DB
+      Promise.all(
+        groupOrigs.map((os) =>
+          fetch(`/api/sections/${os.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ x: os.x + dx, y: os.y + dy }),
+          })
+        )
+      )
+
+      // Move cards physically inside any selected section
+      if (dx !== 0 || dy !== 0) {
+        const notesInSections = canvasNotes.filter((n) => {
+          const cx = n.x + 80
+          const cy = n.y + 60
+          return groupOrigs.some((os) => cx >= os.x && cx <= os.x + os.width && cy >= os.y && cy <= os.y + os.height)
+        })
+        if (notesInSections.length > 0) {
+          const movedNotes = notesInSections.map((n) => ({ ...n, x: n.x + dx, y: n.y + dy }))
+          setCanvasNotes((prev) => prev.map((n) => movedNotes.find((m) => m.id === n.id) ?? n))
+          Promise.all(
+            movedNotes.map((n) =>
+              fetch(`/api/cards/${n.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ x: n.x, y: n.y }),
+              })
+            )
+          )
+        }
+      }
+      return
+    }
+
+    // Single section drag
     const moved = { ...orig, ...pos }
     const others = sectionsBeforeDragRef.current.filter((s) => s.id !== id)
     if (others.some((other) => rectsOverlap(moved, other))) {
       setCanvasSections(sectionsBeforeDragRef.current)
+      setDraggingSectionDelta(null)
       return
     }
     pushUndo()
@@ -1200,18 +1432,23 @@ export default function BoardCanvas({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ x: pos.x, y: pos.y }),
     })
-    // If this is a done section, also translate all its notes
     const dx = pos.x - orig.x
     const dy = pos.y - orig.y
-    if (orig.isDone && (dx !== 0 || dy !== 0)) {
-      const notesInSection = canvasNotes.filter((n) => n.section_id === id)
+    setDraggingSectionDelta(null)
+    if (dx !== 0 || dy !== 0) {
+      const notesInSection = canvasNotes.filter((n) => {
+        const cx = n.x + 80
+        const cy = n.y + 60
+        return cx >= orig.x && cx <= orig.x + orig.width &&
+               cy >= orig.y && cy <= orig.y + orig.height
+      })
       if (notesInSection.length > 0) {
-        const moved = notesInSection.map((n) => ({ ...n, x: n.x + dx, y: n.y + dy }))
+        const movedNotes = notesInSection.map((n) => ({ ...n, x: n.x + dx, y: n.y + dy }))
         setCanvasNotes((prev) =>
-          prev.map((n) => moved.find((m) => m.id === n.id) ?? n)
+          prev.map((n) => movedNotes.find((m) => m.id === n.id) ?? n)
         )
         Promise.all(
-          moved.map((n) =>
+          movedNotes.map((n) =>
             fetch(`/api/cards/${n.id}`, {
               method: "PATCH",
               headers: { "Content-Type": "application/json" },
@@ -1378,21 +1615,50 @@ export default function BoardCanvas({
     setPendingRect(null)
     setContextMenu(null)
     setSelectedSectionId(null)
+    setSelectedSectionIds(new Set())
     setSelectedNoteIds(new Set())
+    setDraggingSectionDelta(null)
+    setAnchorSelected(false)
     sectionUndoStack.current = []
   }
 
   // ── Canvas note handlers ──
 
   async function handleAddNote() {
+    // Compute canvas position so the note appears just left of the button panel
+    // at the current viewport scroll/zoom — independent of where the canvas is.
+    const NOTE_W = 160
+    const NOTE_H = 120
+    const vw = outerRef.current?.clientWidth ?? 800
+    const vh = outerRef.current?.clientHeight ?? 600
+    const { positionX, positionY, scale } = transformState
+    // Button panel: right: 16, button width: 40, gap between note and button: 12
+    const buttonAreaWidth = 16 + 40 + 12
+    // Note right edge aligns with left of button area; note centered vertically on button
+    const noteRightScreen = vw - buttonAreaWidth
+    const noteCenterYScreen = vh / 2
+    const rawX = (noteRightScreen - positionX) / scale - NOTE_W
+    const rawY = (noteCenterYScreen - positionY) / scale - NOTE_H / 2
+    const x = Math.max(0, Math.min(CANVAS_WIDTH - NOTE_W, Math.round(rawX)))
+    const y = Math.max(0, Math.min(CANVAS_HEIGHT - NOTE_H, Math.round(rawY)))
+
+    // Check if spawn position is inside a section and assign section_id
+    const spawnCx = x + 80
+    const spawnCy = y + 60
+    const spawnSection = canvasSections.find(
+      (s) => spawnCx >= s.x && spawnCx <= s.x + s.width && spawnCy >= s.y && spawnCy <= s.y + s.height
+    )
+    const spawnSectionId = spawnSection?.id ?? null
+
     const tempId = crypto.randomUUID()
     const newNote: CanvasCard = {
       id: tempId,
       content: "",
       owner_id: currentUserId,
-      x: 300,
-      y: 300,
+      x,
+      y,
       status: "open",
+      section_id: spawnSectionId ?? undefined,
     }
     setCanvasNotes((prev) => [...prev, newNote])
     setAutoEditNoteId(tempId)
@@ -1400,7 +1666,7 @@ export default function BoardCanvas({
     const res = await fetch("/api/cards", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: " ", board_id: boardId, x: 300, y: 300 }),
+      body: JSON.stringify({ content: " ", board_id: boardId, x, y, section_id: spawnSectionId }),
     })
 
     if (res.ok) {
@@ -1408,7 +1674,7 @@ export default function BoardCanvas({
       setCanvasNotes((prev) =>
         prev.map((n) =>
           n.id === tempId
-            ? { id: saved.id, content: saved.content?.trim() ?? "", owner_id: saved.owner_id, x: saved.x ?? 300, y: saved.y ?? 300, status: saved.status, section_id: saved.section_id ?? null }
+            ? { id: saved.id, content: saved.content?.trim() ?? "", owner_id: saved.owner_id, x: saved.x ?? x, y: saved.y ?? y, status: saved.status, section_id: saved.section_id ?? null }
             : n
         )
       )
@@ -1600,8 +1866,16 @@ export default function BoardCanvas({
     })
   }
 
-  async function handleDeleteNote(id: string) {
-    setCanvasNotes((prev) => prev.filter((n) => n.id !== id))
+  async function handleDeleteNote(id: string, suppressUndoPush = false) {
+    if (!suppressUndoPush) {
+      setCanvasNotes((prev) => {
+        const note = prev.find((n) => n.id === id)
+        if (note) cardUndoStack.current = [...cardUndoStack.current.slice(-19), [note]]
+        return prev.filter((n) => n.id !== id)
+      })
+    } else {
+      setCanvasNotes((prev) => prev.filter((n) => n.id !== id))
+    }
     await fetch(`/api/cards/${id}`, { method: "DELETE" })
   }
 
@@ -1647,7 +1921,7 @@ export default function BoardCanvas({
         minScale={0.25}
         maxScale={2.5}
         limitToBounds={false}
-        panning={{ disabled: isDrawing, velocityDisabled: true }}
+        panning={{ disabled: isDrawing, velocityDisabled: true, allowRightClickPan: false }}
         smooth={true}
         wheel={{ step: 0.0015 }}
         doubleClick={{ disabled: true }}
@@ -1659,7 +1933,8 @@ export default function BoardCanvas({
             role={role}
             sections={canvasSections}
             selectedSectionId={selectedSectionId}
-            onSelectSection={setSelectedSectionId}
+            onSelectSection={handleSelectSection}
+            selectedSectionIds={selectedSectionIds}
             selectedNoteIds={selectedNoteIds}
             onNoteSelect={handleNoteSelect}
             onClearNoteSelection={() => setSelectedNoteIds(new Set())}
@@ -1667,6 +1942,9 @@ export default function BoardCanvas({
             onSectionContextMenu={handleSectionContextMenu}
             onGroupDragCommit={handleGroupDragCommit}
             onLassoSelect={(ids) => setSelectedNoteIds(new Set(ids))}
+            onLassoSelectSections={handleLassoSelectSections}
+            anchorSelected={anchorSelected}
+            draggingSectionDelta={draggingSectionDelta}
             hasClipboard={(clipboardCards !== null && clipboardCards.length > 0) || clipboardSection !== null}
             pendingRect={pendingRect}
             onPendingRect={setPendingRect}
@@ -2078,7 +2356,9 @@ export default function BoardCanvas({
             })) && (
               <button
                 onClick={() => {
-                  for (const id of noteContextMenu.noteIds) handleDeleteNote(id)
+                  const toDelete = canvasNotes.filter((n) => noteContextMenu.noteIds.includes(n.id))
+                  if (toDelete.length > 0) cardUndoStack.current = [...cardUndoStack.current.slice(-19), toDelete]
+                  for (const id of noteContextMenu.noteIds) handleDeleteNote(id, true)
                   setSelectedNoteIds(new Set())
                   setNoteContextMenu(null)
                 }}
