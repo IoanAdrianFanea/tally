@@ -49,6 +49,8 @@ type Props = {
   currentUserId: string
   sections: Section[]
   boardId: string
+  isArchived?: boolean
+  unarchivedUntil?: string | null
 }
 
 type RectData = { x: number; y: number; width: number; height: number }
@@ -698,6 +700,8 @@ export default function BoardCanvas({
   currentUserId,
   sections: _dbSections,
   boardId,
+  isArchived = false,
+  unarchivedUntil = null,
 }: Props) {
 
   // ── Card state ──
@@ -768,6 +772,57 @@ export default function BoardCanvas({
 
   // ── Edit mode + canvas sections state ──
   const [editMode, setEditMode] = useState(false)
+
+  // ── Archive: countdown timer for unarchived 24h window ──
+  const [countdown, setCountdown] = useState<string | null>(null)
+  const [unarchiveLoading, setUnarchiveLoading] = useState(false)
+  const [archiveNotice, setArchiveNotice] = useState(false)
+
+  useEffect(() => {
+    if (!unarchivedUntil) { setCountdown(null); return }
+    function update() {
+      const diff = new Date(unarchivedUntil!).getTime() - Date.now()
+      if (diff <= 0) { setCountdown(null); window.location.reload(); return }
+      const h = Math.floor(diff / 3_600_000)
+      const m = Math.floor((diff % 3_600_000) / 60_000)
+      const s = Math.floor((diff % 60_000) / 1000)
+      setCountdown(`${h}h ${m.toString().padStart(2, "0")}m ${s.toString().padStart(2, "0")}s`)
+    }
+    update()
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
+  }, [unarchivedUntil])
+
+  async function handleUnarchive() {
+    setUnarchiveLoading(true)
+    try {
+      const res = await fetch(`/api/admin/boards/${boardId}/unarchive`, { method: "POST" })
+      if (res.ok) {
+        window.location.reload()
+      } else {
+        const d = await res.json().catch(() => null)
+        alert(d?.error ?? "Failed to unarchive")
+      }
+    } finally {
+      setUnarchiveLoading(false)
+    }
+  }
+
+  async function handleRearchive() {
+    setUnarchiveLoading(true)
+    try {
+      const res = await fetch(`/api/admin/boards/${boardId}/rearchive`, { method: "POST" })
+      if (res.ok) {
+        window.location.reload()
+      } else {
+        const d = await res.json().catch(() => null)
+        alert(d?.error ?? "Failed to re-archive")
+      }
+    } finally {
+      setUnarchiveLoading(false)
+    }
+  }
+
   const [canvasSections, setCanvasSections] = useState<SectionData[]>(
     _dbSections.map((s) => ({ id: s.id, name: s.name, x: s.x, y: s.y, width: s.width, height: s.height, isDone: s.is_done_section }))
   )
@@ -1219,10 +1274,15 @@ export default function BoardCanvas({
   }
 
   function handleGoToAnchor() {
-    if (!anchor || !transformRef.current || !outerRef.current) return
+    if (!transformRef.current || !outerRef.current) return
     const vw = outerRef.current.clientWidth
     const vh = outerRef.current.clientHeight
-    transformRef.current.setTransform(vw / 2 - anchor.x, vh / 2 - anchor.y, 1, 600, "easeOut")
+    if (anchor) {
+      transformRef.current.setTransform(vw / 2 - anchor.x, vh / 2 - anchor.y, 1, 600, "easeOut")
+    } else {
+      // No anchor — center the view to the canvas origin
+      transformRef.current.setTransform(vw / 2, vh / 2, 1, 600, "easeOut")
+    }
   }
 
   async function handleDeleteSection(id: string) {
@@ -1898,6 +1958,7 @@ export default function BoardCanvas({
       style={{
         backgroundColor: "#e8e8f0",
         ...(editMode ? { boxShadow: "inset 0 0 0 2px rgba(99, 102, 241, 0.45)" } : {}),
+        ...(isArchived ? { filter: "sepia(0.18) brightness(0.97)" } : {}),
       }}
     >
       {/* ── Edit mode vignette tint ── */}
@@ -1928,6 +1989,8 @@ export default function BoardCanvas({
         onTransform={(_ref, state) => setTransformState({ positionX: state.positionX, positionY: state.positionY, scale: state.scale })}
       >
         <TransformComponent wrapperStyle={{ width: "100%", height: "100%" }}>
+          {/* pointer-events:none when archived lets pan/zoom work while blocking all canvas edits */}
+          <div style={isArchived ? { pointerEvents: "none" } : undefined}>
           <CanvasContent
             editMode={editMode}
             role={role}
@@ -1970,6 +2033,7 @@ export default function BoardCanvas({
             onAnchorMove={handleAnchorMove}
             onAnchorDelete={handleAnchorDelete}
           />
+          </div>
         </TransformComponent>
       </TransformWrapper>
 
@@ -1999,8 +2063,8 @@ export default function BoardCanvas({
           zIndex: 40,
         }}
       >
-        {/* Add note button — visible to all users */}
-        <button
+        {/* Add note button — hidden on archived boards */}
+        {!isArchived && <button
           onClick={handleAddNote}
           title="Add sticky note"
           style={{
@@ -2027,14 +2091,13 @@ export default function BoardCanvas({
           }}
         >
           <StickyNoteIcon size={18} />
-        </button>
+        </button>}
 
-        {/* Go to anchor button — visible when anchor is set */}
-        {anchor && (
-          <button
-            onClick={handleGoToAnchor}
-            title="Return to anchor"
-            style={{
+        {/* Go to anchor / center view button — always visible */}
+        <button
+          onClick={handleGoToAnchor}
+          title={anchor ? "Return to anchor" : "Center view"}
+          style={{
               width: 40,
               height: 40,
               borderRadius: "50%",
@@ -2059,10 +2122,9 @@ export default function BoardCanvas({
           >
             <Navigation size={18} />
           </button>
-        )}
 
-        {/* Edit mode toggle — admin only */}
-        {role === "admin" && (
+        {/* Edit mode toggle — admin only, hidden on archived boards */}
+        {role === "admin" && !isArchived && (
           <button
             onClick={toggleEditMode}
             title={editMode ? "Exit edit mode" : "Enter edit mode"}
@@ -2412,6 +2474,151 @@ export default function BoardCanvas({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ── Archived overlay ── */}
+      {/* ── Archived: top banner (non-blocking — pan/zoom still works) ── */}
+      {isArchived && (
+        <div
+          style={{
+            position: "absolute",
+            top: 12,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "6px 8px 6px 12px",
+            borderRadius: 999,
+            backgroundColor: "rgba(245,243,255,0.94)",
+            backdropFilter: "blur(8px)",
+            border: "1.5px solid rgba(99,102,241,0.28)",
+            fontFamily: "var(--font-sora,'Sora',sans-serif)",
+            boxShadow: "0 2px 12px rgba(99,102,241,0.12)",
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+          }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" />
+          </svg>
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#6366f1", letterSpacing: "0.03em" }}>Archived</span>
+          <span style={{ width: 1, height: 12, background: "rgba(99,102,241,0.22)", display: "inline-block", margin: "0 2px" }} />
+          <span style={{ fontSize: 12, color: "#6b7280" }}>Read-only · browse freely</span>
+          {role === "admin" && (
+            <button
+              onClick={() => setArchiveNotice(true)}
+              disabled={unarchiveLoading}
+              style={{
+                marginLeft: 6,
+                padding: "4px 12px",
+                borderRadius: 999,
+                border: "none",
+                backgroundColor: "#6366f1",
+                color: "white",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: unarchiveLoading ? "not-allowed" : "pointer",
+                opacity: unarchiveLoading ? 0.7 : 1,
+                fontFamily: "inherit",
+                pointerEvents: "auto",
+              }}
+            >
+              {unarchiveLoading ? "Opening…" : "Unarchive for 24h"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── Unarchive confirmation dialog ── */}
+      {archiveNotice && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 300, backgroundColor: "rgba(0,0,0,0.35)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <div
+            style={{ background: "white", borderRadius: 16, padding: "32px", boxShadow: "0 12px 40px rgba(0,0,0,0.18)", minWidth: 340, fontFamily: "var(--font-sora,'Sora',sans-serif)" }}
+          >
+            <p style={{ fontSize: 16, fontWeight: 700, color: "#1e1b4b", marginBottom: 8 }}>Unarchive this day?</p>
+            <p style={{ fontSize: 13, color: "#6b7280", marginBottom: 24, lineHeight: 1.6 }}>
+              The board will be open for editing for <strong>24 hours</strong>. After that, it will be automatically re-archived and the archive snapshot will be updated.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button
+                onClick={() => setArchiveNotice(false)}
+                style={{ padding: "8px 20px", borderRadius: 8, border: "1.5px solid #ddd", background: "white", fontSize: 13, fontWeight: 500, cursor: "pointer", color: "#555" }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => { setArchiveNotice(false); handleUnarchive() }}
+                style={{ padding: "8px 20px", borderRadius: 8, border: "none", background: "#6366f1", color: "white", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+              >
+                Unarchive
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Unarchived: countdown timer + re-archive now button ── */}
+      {!isArchived && countdown && (
+        <div
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 12,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            fontFamily: "var(--font-sora,'Sora',sans-serif)",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "5px 12px",
+              borderRadius: 999,
+              backgroundColor: "rgba(234,179,8,0.12)",
+              border: "1.5px solid rgba(234,179,8,0.35)",
+              fontSize: 11,
+              fontWeight: 600,
+              color: "#92400e",
+              pointerEvents: "none",
+              backdropFilter: "blur(8px)",
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+            </svg>
+            Re-archives in {countdown}
+          </div>
+          {role === "admin" && (
+            <button
+              onClick={handleRearchive}
+              disabled={unarchiveLoading}
+              style={{
+                padding: "5px 12px",
+                borderRadius: 999,
+                border: "1.5px solid rgba(99,102,241,0.35)",
+                backgroundColor: "rgba(245,243,255,0.92)",
+                backdropFilter: "blur(8px)",
+                fontSize: 11,
+                fontWeight: 600,
+                color: "#6366f1",
+                cursor: unarchiveLoading ? "not-allowed" : "pointer",
+                opacity: unarchiveLoading ? 0.7 : 1,
+                fontFamily: "inherit",
+              }}
+            >
+              {unarchiveLoading ? "…" : "Re-archive now"}
+            </button>
+          )}
         </div>
       )}
     </div>

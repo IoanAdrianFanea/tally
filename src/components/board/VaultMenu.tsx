@@ -8,7 +8,6 @@ import {
   X,
   LogOut,
   ChevronRight,
-  AlertTriangle,
   Archive,
 } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -77,9 +76,10 @@ export default function VaultMenu({ role, currentUserId, profile, boardId, curre
 
   // Settings
   const [archiveLoading, setArchiveLoading] = useState(false)
-  const [resetLoading, setResetLoading] = useState(false)
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false)
+  const [daysUntilArchive, setDaysUntilArchive] = useState<number | null>(null)
+  const [lastArchivedAt, setLastArchivedAt] = useState<string | null>(null)
+  const [lastArchivedMonth, setLastArchivedMonth] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isOpen || activeView !== "leaderboard") return
@@ -113,7 +113,20 @@ export default function VaultMenu({ role, currentUserId, profile, boardId, curre
     return () => controller.abort()
   }, [isOpen, activeView, currentUserId, boardId, openCount])
 
-  async function handleArchiveOnly() {
+  // Fetch archive status when settings view opens
+  useEffect(() => {
+    if (!isOpen || activeView !== "settings") return
+    fetch("/api/admin/archive-status")
+      .then((r) => r.json())
+      .then((data) => {
+        setDaysUntilArchive(data.days_until_next_archive ?? null)
+        setLastArchivedAt(data.last_archived_at ?? null)
+        setLastArchivedMonth(data.last_archived_month ?? null)
+      })
+      .catch(() => {})
+  }, [isOpen, activeView])
+
+  async function handleArchiveMonth() {
     setArchiveLoading(true)
     try {
       const res = await fetch("/api/admin/archive", { method: "POST" })
@@ -127,21 +140,6 @@ export default function VaultMenu({ role, currentUserId, profile, boardId, curre
       router.refresh()
     } finally {
       setArchiveLoading(false)
-    }
-  }
-
-  async function handleArchiveAndReset() {
-    setResetLoading(true)
-    try {
-      const a = await fetch("/api/admin/archive", { method: "POST" })
-      if (!a.ok) { alert("Archive failed"); return }
-      const r = await fetch("/api/admin/reset", { method: "POST" })
-      if (!r.ok) { alert("Reset failed"); return }
-      setResetConfirmOpen(false)
-      setIsOpen(false)
-      router.refresh()
-    } finally {
-      setResetLoading(false)
     }
   }
 
@@ -432,51 +430,67 @@ export default function VaultMenu({ role, currentUserId, profile, boardId, curre
 
           {/* ────────────────────────── SETTINGS VIEW */}
           {activeView === "settings" && (
-            <div>
-              <p className="text-[0.6875rem] font-bold text-on-surface-variant/70 uppercase tracking-[0.08em] mb-3" style={soraFont}>
-                Month Management
-              </p>
-              {role !== "admin" ? (
-                <p className="text-sm text-on-surface-variant" style={soraFont}>
-                  You don&apos;t have permission to manage settings.
+            <div className="space-y-5">
+              <div>
+                <p className="text-[0.6875rem] font-bold text-on-surface-variant/70 uppercase tracking-[0.08em] mb-3" style={soraFont}>
+                  Archive
                 </p>
-              ) : (
-                <div className="space-y-2">
-                  {/* Archive only */}
-                  <button
-                    type="button"
-                    onClick={() => setArchiveConfirmOpen(true)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl
-                      border border-outline-variant/30 bg-surface-container-low/40
-                      hover:bg-surface-container-low transition-colors group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Archive className="h-4 w-4 text-primary" />
+                {role !== "admin" ? (
+                  <p className="text-sm text-on-surface-variant" style={soraFont}>
+                    You don&apos;t have permission to manage settings.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {/* Next archive counter */}
+                    <div className="px-4 py-3.5 rounded-xl border border-outline-variant/20 bg-surface-container-low/40">
+                      <div className="flex items-center gap-3 mb-1">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                          <Archive className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="text-sm font-semibold text-on-surface" style={soraFont}>Next archiving</span>
                       </div>
-                      <span className="text-sm font-semibold text-on-surface" style={soraFont}>Archive month</span>
+                      {!lastArchivedMonth ? (
+                        <p className="text-xs text-on-surface-variant/70 mt-1.5 ml-11" style={soraFont}>
+                          Never archived — auto-archives on the 1st of each month.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-on-surface-variant/70 mt-1.5 ml-11" style={soraFont}>
+                          {daysUntilArchive === 1
+                            ? "Tomorrow (1st of month)"
+                            : daysUntilArchive === 0
+                            ? "Today — archiving now"
+                            : `In ${daysUntilArchive} day${daysUntilArchive === 1 ? "" : "s"}`}
+                          <span className="ml-1 text-on-surface-variant/50">
+                            — last: {lastArchivedMonth}
+                          </span>
+                        </p>
+                      )}
                     </div>
-                    <ChevronRight className="h-4 w-4 text-on-surface-variant/60 group-hover:text-on-surface transition-colors" />
-                  </button>
 
-                  {/* Archive + Reset */}
-                  <button
-                    type="button"
-                    onClick={() => setResetConfirmOpen(true)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl
-                      border border-red-100 bg-red-50/30
-                      hover:bg-red-50 transition-colors group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center">
-                        <Archive className="h-4 w-4 text-red-500" />
+                    {/* Archive this month button */}
+                    <button
+                      type="button"
+                      onClick={() => setArchiveConfirmOpen(true)}
+                      className="w-full flex items-center justify-between px-4 py-3.5 rounded-xl
+                        border border-outline-variant/30 bg-surface-container-low/40
+                        hover:bg-surface-container-low transition-colors group"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                          <Archive className="h-4 w-4 text-primary" />
+                        </div>
+                        <div className="text-left">
+                          <span className="text-sm font-semibold text-on-surface block" style={soraFont}>Archive this month</span>
+                          <span className="text-xs text-on-surface-variant/60" style={soraFont}>
+                            Snapshots all boards and locks them
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-sm font-semibold text-red-600" style={soraFont}>Archive &amp; Reset</span>
-                    </div>
-                    <AlertTriangle className="h-4 w-4 text-red-400" />
-                  </button>
-                </div>
-              )}
+                      <ChevronRight className="h-4 w-4 text-on-surface-variant/60 group-hover:text-on-surface transition-colors" />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -543,17 +557,10 @@ export default function VaultMenu({ role, currentUserId, profile, boardId, curre
       {/* ── Confirm modals ── */}
       {archiveConfirmOpen && confirmModal(
         "Archive this month?",
-        "Saves a snapshot of the current board. Cards will not be deleted. You can archive again to update the snapshot.",
-        handleArchiveOnly,
+        "Takes a full snapshot of every board day in the current month, locks them as read-only, and starts the 30-day cycle for the next archive. This action cannot be undone.",
+        handleArchiveMonth,
         () => setArchiveConfirmOpen(false),
         archiveLoading
-      )}
-      {resetConfirmOpen && confirmModal(
-        "Archive & Reset?",
-        "Saves a snapshot then permanently deletes all cards. The board will be empty after this. Cannot be undone.",
-        handleArchiveAndReset,
-        () => setResetConfirmOpen(false),
-        resetLoading
       )}
     </>
   )

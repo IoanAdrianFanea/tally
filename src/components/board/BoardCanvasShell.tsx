@@ -43,6 +43,8 @@ type Props = {
   currentUserId: string
   sections: Section[]
   boardId: string
+  isArchived?: boolean
+  unarchivedUntil?: string | null
 }
 
 export default function BoardCanvasShell(props: Props) {

@@ -43,7 +43,12 @@ export default function UserMenu({ displayName, columnColor, points: initialPoin
 
     const channel = supabase
       .channel(`user-points-${boardId}-${currentUserId}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "cards", filter: `board_id=eq.${boardId}` }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "cards" }, (payload) => {
+        // Filter client-side: only react to changes on this board
+        const newRow = payload.new as Record<string, unknown> | null
+        const oldRow = payload.old as Record<string, unknown> | null
+        const rowBoardId = newRow?.board_id ?? oldRow?.board_id
+        if (rowBoardId && rowBoardId !== boardId) return
         supabase
           .from("cards")
           .select("id", { count: "exact", head: true })

@@ -46,6 +46,8 @@ type Props = {
   boardId: string | null
   currentDate: string
   hasSearch?: boolean
+  isArchived?: boolean
+  unarchivedUntil?: string | null
 }
 
 const soraFont = { fontFamily: "var(--font-sora, 'Sora', sans-serif)" }
@@ -60,6 +62,8 @@ export default function BoardLayout({
   boardId,
   currentDate,
   hasSearch,
+  isArchived = false,
+  unarchivedUntil = null,
 }: Props) {
   const currentUserId = currentUserIdProp ?? profile?.id ?? ""
 
@@ -116,6 +120,8 @@ export default function BoardLayout({
             currentUserId={currentUserId}
             sections={sections}
             boardId={boardId}
+            isArchived={isArchived}
+            unarchivedUntil={unarchivedUntil}
           />
         ) : (
           <div className="h-full flex items-center justify-center text-outline text-sm"
